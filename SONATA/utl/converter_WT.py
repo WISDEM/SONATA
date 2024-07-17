@@ -290,16 +290,6 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                                         tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['orientation'] = 0.
 
                                     web_filler_index = False  #  after completing the te part (this web is finished now!), prepare for next web
-        # if x[i] > span_adhesive and n_webs > 0:
-        if x[i] > span_adhesive and len(tmp2[i]['segments']) > 1:
-            # id_seg = n_webs*2 + 2
-            tmp2[i]['segments'][-1]['filler'] = 'Adhesive'
-            tmp2[i]['segments'][-1]['layup'][0]['name'] = 'dummy'
-            tmp2[i]['segments'][-1]['layup'][0]['material_name'] = 'Adhesive'
-            tmp2[i]['segments'][-1]['layup'][0]['thickness'] = 5.e-4
-            tmp2[i]['segments'][-1]['layup'][0]['start'] = 0.0
-            tmp2[i]['segments'][-1]['layup'][0]['end'] = 1.0
-            tmp2[i]['segments'][-1]['layup'][0]['orientation'] = 0.0
 
     # Split webs for determining the
     # print(tmp2)
@@ -411,6 +401,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
         min_start = min(starts)
         max_end = max(ends)
         if min_start != 0 or max_end != 1:
+            print("WARNING: No closed section found in segment 0. Segment has been closed.")
             if lst[i][0]<0.6 or lst[i][0] == 1:
                 tolerance = 1e-4
             else:
