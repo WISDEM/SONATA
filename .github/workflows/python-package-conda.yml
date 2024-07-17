@@ -55,3 +55,8 @@ jobs:
         run: |
           cd examples/1_IEA15MW
           python 1_sonata_IEA15.py
+      
+      - name: Run example 2
+        run: |
+          cd examples/2_IEA22MW
+          python 2_sonata_IEA22.py
