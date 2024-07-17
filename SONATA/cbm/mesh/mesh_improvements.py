@@ -92,7 +92,7 @@ def modify_sharp_corners(cells, b_BSplineLst, global_minLen, layer_thickness, La
                     # =====================CREATE FRONT CELLS
                     FrontCellLst = []
                     # print '@', c.nodes[0],'  len(Middle):',len(MiddleNodes),'len(Front):',len(FrontNodes),'len(Back):',len(BackNodes)
-                    if MiddleNodes and FrontNodes and BackNodes:
+                    if len(MiddleNodes) == len(FrontNodes) and len(BackNodes) == len(MiddleNodes) and MiddleNodes:
                             
                         for i in range(0, len(MiddleNodes)):
 
