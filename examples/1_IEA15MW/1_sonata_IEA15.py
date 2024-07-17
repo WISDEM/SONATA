@@ -6,7 +6,7 @@ from SONATA.utl.beam_struct_eval import beam_struct_eval
 
 # Path to yaml file
 run_dir = os.path.dirname( os.path.realpath(__file__) ) + os.sep
-job_str = 'IEA-15-240-RWT_2.yaml'
+job_str = 'IEA-15-240-RWT.yaml'
 job_name = 'IEA15'
 filename_str = run_dir + job_str
 
