@@ -673,7 +673,7 @@ components:
     monopile:
         transition_piece_mass: 0.0
         outer_shape_bem:
-            reference_axis: &id004
+            reference_axis: &id010
                 x:
                     grid: [0.0000, 0.1090, 0.2107, 0.3123, 0.4140, 0.5157, 0.5642, 0.6126, 0.6610, 0.7094, 0.7579, 0.7821, 0.8063, 0.8305, 0.8547, 0.8789, 0.9031, 0.9274, 0.9516, 0.9758, 1.0000]
                     values: [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0]
@@ -691,7 +691,7 @@ components:
                 values: [0.5, 0.5]
         internal_structure_2d_fem:
             outfitting_factor: 1.07
-            reference_axis: *id004
+            reference_axis: *id010
             layers:
                -  name: monopile_wall
                   material: steel
