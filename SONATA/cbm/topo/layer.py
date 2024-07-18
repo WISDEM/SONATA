@@ -157,7 +157,7 @@ class Layer(object):
     def build_layer(self, l0=1):
         npArray = discretize_BSplineLst(self.Boundary_BSplineLst, 1.2e-6 * l0)
         self.offlinepts = shp_parallel_offset(npArray, self.thickness, self.join_style)
-        if self.shape_intersects_itself(self.offlinepts):
+        if self.shape_intersects_itself(self.offlinepts[1:-2]):
             print("WARNING: THERE IS AN INTERSECTION IN THE STRUCTURE")
         OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0, cutoff_style = 2)
         OffsetBSplineLst = cutoff_layer(self.Boundary_BSplineLst, OffsetBSplineLst, self.S1, self.S2, self.cutoff_style)
