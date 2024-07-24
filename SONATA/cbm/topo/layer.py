@@ -2,6 +2,7 @@
 import numpy as np
 from OCC.Core.gp import gp_Pnt2d
 from scipy.spatial import distance
+import matplotlib.pyplot as plt
 
 # First party modules
 from SONATA.cbm.mesh.mesh_byprojection import \
@@ -108,6 +109,17 @@ class Layer(object):
     def build_wire(self):  # Builds TopoDS_Wire from connecting BSplineSegments and returns it
         self.wire = build_wire_from_BSplineLst(self.BSplineLst)
 
+    def display_bsplinelst(self, bsplinelst, color = 'red'):
+        for bspline in bsplinelst:
+            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
+            # Extract points for plotting
+            num_points = 100  # Number of points to plot
+            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
+            x_values = [bspline.Value(u).X() for u in u_values]
+            y_values = [bspline.Value(u).Y() for u in u_values]
+        
+            plt.plot(x_values, y_values, color = color)
+
     # Function to check if two line segments (p1, q1) and (p2, q2) intersect
     def do_intersect(self, p1, q1, p2, q2):
         def orientation(p, q, r):
@@ -162,6 +174,7 @@ class Layer(object):
         OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0, cutoff_style = 2)
         OffsetBSplineLst = cutoff_layer(self.Boundary_BSplineLst, OffsetBSplineLst, self.S1, self.S2, self.cutoff_style)
         self.BSplineLst = OffsetBSplineLst
+        self.display_bsplinelst(self.BSplineLst)
 
     def determine_a_nodes(self, SegmentLst, global_minLen, display=None):
         """ """
