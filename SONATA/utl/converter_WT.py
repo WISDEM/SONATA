@@ -236,7 +236,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                                     tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['material_name'] = sec['material']
                                     # set_interp = PchipInterpolator(sec['thickness']['grid'], sec['thickness']['values'])
                                     tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['thickness'] = thick_i  # * 0.5
-                                    flange = 0.0
+                                    flange = 0.01
                                     tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['start'] = id_webs[i][(sec['web'])]['end_nd_arc'] - flange
                                     tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['end']   = id_webs[i][(sec['web'])]['start_nd_arc'] + flange
 
@@ -279,7 +279,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                                     tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['material_name'] = sec['material']
                                     # set_interp = PchipInterpolator(sec['thickness']['grid'], sec['thickness']['values'])
                                     tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['thickness'] = thick_i  # * 0.5
-                                    flange = 0.0
+                                    flange = 0.01
                                     tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['start'] = id_webs[i][(sec['web'])]['start_nd_arc'] - flange
                                     tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['end'] = id_webs[i][(sec['web'])]['end_nd_arc'] + flange
 
