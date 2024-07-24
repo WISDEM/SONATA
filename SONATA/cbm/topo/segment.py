@@ -211,7 +211,7 @@ class Segment(object):
                     self.Layup[i - 1][2],
                     self.Layup[i - 1][3],
                     self.Layup[i - 1][4],
-                    cutoff_style=2,
+                    cutoff_style=0,
                     join_style=1,
                     name="test",
                 )
