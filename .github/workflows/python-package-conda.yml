@@ -64,4 +64,4 @@ jobs:
       - name: Run example 5
         run: |
           cd examples/5_IEA_5MW
-          python 5sonata_IEA5.py
+          python 5_sonata_IEA5.py
