@@ -1,17 +1,15 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Tue Mar 28 09:58:14 2017
-
-@author: TPflumm
-"""
-# Core Library modules
 import itertools
+import matplotlib.pyplot as plt
 
 # Third party modules
 import numpy as np
 from OCC.Core.Geom2dAPI import (Geom2dAPI_PointsToBSpline,
                                 Geom2dAPI_ProjectPointOnCurve,)
-from OCC.Core.gp import gp_Pnt2d, gp_Vec2d
+from OCC.Core.gp import gp_Pnt2d, gp_Vec2d, gp_Dir2d, gp_Lin2d
+from OCC.Core.Geom2d import Geom2d_Line
+from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
+from OCC.Core.Geom2dAPI import Geom2dAPI_Interpolate
+from OCC.Core.TColgp import TColgp_HArray1OfPnt2d
 
 # First party modules
 from SONATA.cbm.mesh.cell import Cell
@@ -20,7 +18,48 @@ from SONATA.cbm.topo.BSplineLst_utils import (
     ProjectPointOnBSplineLst, find_BSplineLst_coordinate, intersect_BSplineLst_with_BSpline,)
 from SONATA.cbm.topo.utils import point2d_list_to_TColgp_Array1OfPnt2d
 
+def display_bsplinelst(bsplinelst, color = 'red'):
+    for bspline in bsplinelst:
+        u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
+        # Extract points for plotting
+        num_points = 100  # Number of points to plot
+        u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
+        x_values = [bspline.Value(u).X() for u in u_values]
+        y_values = [bspline.Value(u).Y() for u in u_values]
+        plt.plot(x_values, y_values, color = color)
 
+def angle_between(v1, v2):
+    """Returns the angle in radians between vectors 'v1' and 'v2'"""
+    cos_theta = np.dot(v1, v2) / (np.linalg.norm(v1) * np.linalg.norm(v2))
+    cos_theta = np.clip(cos_theta, -1.0, 1.0)  # Clip to handle numerical errors
+    return np.arccos(cos_theta)
+
+
+def projection_method(points, bspline, tolerance):
+    prev = points[0]
+    curr = points[1]
+    start_point_2d = gp_Pnt2d(curr[0],curr[1])
+    next = points[2]
+    vec1 = curr - prev
+    vec2 = next - curr
+    angle = angle_between(vec1,vec2)
+    
+    vec1_perp = np.array([-vec1[1], vec1[0]]) / np.linalg.norm([-vec1[1], vec1[0]])
+    vec2_perp = np.array([-vec2[1], vec2[0]]) / np.linalg.norm([-vec2[1], vec2[0]])
+    
+    bisecting_vector = - np.sqrt((1 + np.dot(vec1_perp, vec2_perp)) / 2) * (vec1_perp + vec2_perp) / np.linalg.norm(vec1_perp + vec2_perp)
+    direction_2d = gp_Dir2d(bisecting_vector[0],bisecting_vector[1])
+    line_2d = Geom2d_Line(start_point_2d, direction_2d)
+    intersector = Geom2dAPI_InterCurveCurve(line_2d, bspline)
+    # line_2d_neg = Geom2d_Line(start_point_2d, direction_2d)
+    # if not intersector:
+    #     intersector = Geom2dAPI_InterCurveCurve(line_2d_neg, bspline)
+    if intersector.NbPoints() > 0:
+        intersection_point = intersector.Point(1)
+        distance = np.sqrt((curr[0]-intersection_point.X())**2+(curr[1]-intersection_point.Y())**2)
+        if distance < tolerance*(2+np.cos(angle)):
+            return intersection_point
+    return None
 
 def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, layer_thickness, tol=1e-2, crit_angle=95, LayerID=0, refL=1.0, **kw):
     """
@@ -48,6 +87,8 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
     TODO: * scale distance not only to layerthickenss but also to min_len.
             or adapt the distance individually for each node. 
     """
+    # display_bsplinelst(a_BSplineLst, 'blue')
+    # display_bsplinelst(b_BSplineLst, 'green')
 
     # KWARGS:
     if kw.get("display") != None:
@@ -61,6 +102,7 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
     flag_integrate_leftover_interior_nodes = False
 
     # Is a_BSplineLst closed?
+    
     closed_a = False
     if a_BSplineLst[0].StartPoint().IsEqual(a_BSplineLst[-1].EndPoint(), 1e-5):
         closed_a = True
@@ -76,7 +118,7 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
         pPnts = []
         pPara = []
         pIdx = []
-
+        projected = False
         for idx, item in enumerate(b_BSplineLst):
             first = item.FirstParameter()
             last = item.LastParameter()
@@ -84,17 +126,31 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
             Umin = first - (last - first) * tol
             Umax = last + (last - first) * tol
             projection = Geom2dAPI_ProjectPointOnCurve(Pnt2d, item, Umin, Umax)
-            # projection = Geom2dAPI_ProjectPointOnCurve(Pnt2d,item)
 
             for j in range(1, projection.NbPoints() + 1):
                 if projection.Distance(j) <= distance:
                     pPnts.append(projection.Point(j))
                     pPara.append(projection.Parameter(j))
                     pIdx.append(idx)
+                    projected = True
                 else:
                     None
+        if not projected and i-1 != 0 and not i-1 > len(prj_nodes)-2:
+            for idx, item in enumerate(b_BSplineLst):
+                prev_point = np.array([prj_nodes[i-2].coordinates[0], prj_nodes[i-2].coordinates[1]])
+                curr_point = np.array([prj_nodes[i-1].coordinates[0], prj_nodes[i-1].coordinates[1]])
+                next_point = np.array([prj_nodes[i].coordinates[0], prj_nodes[i].coordinates[1]])
+                projected_point = projection_method([prev_point,curr_point,next_point], item, distance*10)
+                if projected_point:
+                    pPnts.append(projected_point)
+                    pPara.append(node.parameters[2])
+                    pIdx.append(idx)
+                    plt.plot(projected_point.X(),projected_point.Y(), color = 'purple', marker = 'x', markersize = 12)
+                    node.corner = False
+                    break
+        for point in pPnts:
+            plt.plot(point.X(),point.Y(), color = 'blue', marker = 'o', markersize = 10)
 
-        # display.DisplayShape(pPnts[0], color='GREEN')
 
         # ==================making sure the pPnts are unique:
         """It happend that somehow the same points were found multiple times"""
@@ -135,7 +191,7 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
             angle = 180 - abs(v1.Angle(v2) * 180 / np.pi)
             vres = v1.Added(v2)
 
-            if angle < crit_angle:
+            if angle < crit_angle and not node.corner:
                 node.corner = True
 
             if angle >= crit_angle:
@@ -203,7 +259,7 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                         else:
                             idx = j + pIdx[1] - len(b_BSplineLst)
                         exterior_corners_para.append([LayerID, idx, u1])
-                        # display.DisplayShape(item.EndPoint(),color='WHITE')
+                        # display.DisplayShape(item.EndPoint(),color='WHITE')            
 
             # =======================generate b_nodes===========================
             # print node,'corner: ', node.corner, ', regular_corner = ',node.regular_corner, ',  Len:exterior_corners =',len(exterior_corners)
@@ -498,5 +554,9 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
 
         display.View_Top()
         display.FitAll()
+    # for node in a_nodes:
+    #          plt.plot(node.coordinates[0],node.coordinates[1], color = 'blue', marker = 'o', markersize = 10)
+    # for node in b_nodes:
+    #         plt.plot(node.coordinates[0],node.coordinates[1], color = 'green', marker = 'o', markersize = 10)
 
     return a_nodes, b_nodes, cellLst
