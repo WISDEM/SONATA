@@ -8,7 +8,7 @@ Created on Thu Apr 11 15:22:29 2019
 # Third party modules
 import numpy as np
 from OCC.Core.Geom import Geom_Plane
-from OCC.Core.gp import gp_Ax2, gp_Ax3, gp_Dir, gp_Pnt, gp_Trsf, gp_Vec
+from OCC.Core.gp import gp_Dir, gp_Pnt
 from scipy.interpolate import interp1d
 
 # First party modules
@@ -72,51 +72,6 @@ class interpBSplineLst(object):
                 raise Exception
 
         return (np.asarray(res), np.asarray(resCoords))
-
-    def interpolate_curvature(self, grid, ax2=None):
-        """
-        interpolates the BSplineLst at a certain radial station and returns the 
-        curvature kappa2 and kappa3 in the local Ax2 frame if the option is 
-        passed.   
-        
-        
-        Parameters
-        --------
-        grid : float
-            nondimensional x coordinate in the blade ref. frame
-        ax2 : gp_Ax2, optional
-            right handed coordinate system. 
-        
-        Returns
-        --------
-        (k2,k3) : tuple
-            tuple of moment strain measures (curvature) about the given 
-            coorindate systems (x2 and x3) axis.
-                    
-        """
-        p = gp_Pnt()
-        v1 = gp_Vec()
-        v2 = gp_Vec()
-
-        para = self.interpolate(grid)[1]
-        i = int(para[0][0])
-        u = para[0][1]
-        s = self.BSplineLst[i]
-        s.D2(u, p, v1, v2)
-
-        # transform curvature vector to local Ax2
-        if ax2:
-            trsf = gp_Trsf()
-            trsf.SetTransformation(gp_Ax3(ax2))
-            k_vec = v2.Transformed(trsf)
-        else:
-            k_vec = v2
-
-        # swap the axis of the curvature vector, return moment strain measures.
-        k2 = k_vec.Coord()[2]
-        k3 = k_vec.Coord()[1]
-        return (k2, k3)
-
 
 if __name__ == "__main__":
     pass

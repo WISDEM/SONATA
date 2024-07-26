@@ -14,6 +14,52 @@ from .utils import (P2Pdistance, Polygon_orientation,
                     calc_DCT_angles, isclose, unique_rows,)
 
 
+# Function to check if two line segments (p1, q1) and (p2, q2) intersect
+def do_intersect(p1, q1, p2, q2):
+    def orientation(p, q, r):
+        val = (float(q[1] - p[1]) * (r[0] - q[0])) - (float(q[0] - p[0]) * (r[1] - q[1]))
+        if val > 0:
+            return 1  # Clockwise
+        elif val < 0:
+            return 2  # Counterclockwise
+        else:
+            return 0  # Collinear
+
+    def on_segment(p, q, r):
+        if min(p[0], q[0]) <= r[0] <= max(p[0], q[0]) and min(p[1], q[1]) <= r[1] <= max(p[1], q[1]):
+            return True
+        return False
+
+    o1 = orientation(p1, q1, p2)
+    o2 = orientation(p1, q1, q2)
+    o3 = orientation(p2, q2, p1)
+    o4 = orientation(p2, q2, q1)
+
+    # General case
+    if o1 != o2 and o3 != o4:
+        return True
+
+    # Special cases
+    if o1 == 0 and on_segment(p1, q1, p2):
+        return True
+    if o2 == 0 and on_segment(p1, q1, q2):
+        return True
+    if o3 == 0 and on_segment(p2, q2, p1):
+        return True
+    if o4 == 0 and on_segment(p2, q2, q1):
+        return True
+
+    return False
+
+# Function to check if a shape intersects itself
+def shape_intersects_itself(coords):
+    num_points = len(coords)
+    for i in range(num_points - 1):  # Loop to (num_points - 1) to avoid out-of-bounds access
+        for j in range(i + 2, num_points - (1 if i == 0 else 0)):  # Adjusting the range to avoid out-of-bounds
+            if do_intersect(coords[i], coords[i + 1], coords[j], coords[(j + 1) % num_points]):
+                return [True, coords[i:j]]
+    return [False, coords]
+
 def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
     # OFFSET ALGORITHM
     # join_style = 1#( 1:round,2:mitre,3:bevels)
@@ -22,9 +68,17 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
     # ==============SHAPELY-OFFSET ALGORITHM====================================
     if P2Pdistance(arrPts[0], arrPts[-1]) <= 1e-6:
         closed = True
-        afpoly = shp.Polygon(arrPts)
-        noffafpoly = afpoly.buffer(-dist)  # Inward offset
-        data = np.array(noffafpoly.exterior.xy).T
+        try:
+            afpoly = shp.Polygon(arrPts)
+            noffafpoly = afpoly.buffer(-dist)  # Inward offset
+            data = np.array(noffafpoly.exterior.xy).T
+        except:
+            intersects = True
+            while intersects:
+                [intersects, arrPts] = shape_intersects_itself(arrPts)
+            afpoly = shp.Polygon(arrPts)
+            noffafpoly = afpoly.buffer(-dist)  # Inward offset
+            data = np.array(noffafpoly.exterior.xy).T
 
     else:
         closed = False
@@ -56,8 +110,6 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
         if Orientation == True:
             data = np.flipud(data)
 
-    # if closed == False:
-    #     data = np.flipud(data)
     # ==============Interpolate large linear spaces=============================
     seg_P2Plength = []
     cumm_length = 0
@@ -100,39 +152,8 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
             Refinement = True
         else:
             Refinement = False
-
-    # Make sure there are unique rows
-    #    if np.allclose(data[0],data[-1]):
-    #        closed = True
-    #
-    #    else:
-    #        closed = False
-    #        before = len(data)
-    #        data = unique_rows(data.round(decimals=9))
-    #        after = len(data)
-    #        if after<before:
-    #            print 'non unique elements found',len(data)
-
-    # ======PLOTTING for debugging
-    #    fig = plt.figure()
-    #    fig.add_subplot(111)
-    #    plt.clf()
-    #    plt.plot(*arrPts.T, color='black', marker='.')
-    #    plt.plot(*arrPts[0].T, color='green', marker='o')
-    #    plt.plot(*arrPts[-1].T, color='purple', marker='o')
-    #
-    #    for i, item in enumerate(arrPts):
-    #        plt.annotate(i, (item[0],item[1]), color='black')
-    #
-    #    plt.plot(*data.T, color='red', marker='.')
-    #    plt.plot(*data[0].T, color='green', marker='>')
-    #    plt.plot(*data[-1].T, color='purple', marker='>')
-    #
-    #    for i, item in enumerate(data):
-    #        plt.annotate(i, (item[0],item[1]), color='red')
-    #
-    #    plt.axis('equal')
-    #    plt.show()
+        # if closed:
+        #     np.vstack((data, data[0]))
 
     return data
 
@@ -140,36 +161,3 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
 # ==============================================================================
 if __name__ == "__main__":
     exec(compile(open("SONATA.py").read(), "SONATA.py", "exec"))
-#    for i,item in enumerate(projection):
-#        timelines(0,item[0],item[1],color[int(item[2])])
-
-#    plt.figure(2)
-#    plt.plot(*arrPts.T, color='black', marker='.')
-# plt.plot(*data.T, color='red', marker='.')
-
-
-#    #Find corners and edges of original data
-#    DCT_angles1 = calc_DCT_angles(arrPts)
-#    angular_deflection = 30
-#    concave1 = []
-#    for i in range(0,DCT_angles1.shape[0]):
-#        if DCT_angles1[i] > (180 + angular_deflection):
-#            concave1.append(i)
-#    NbConcave1 = np.size(concave1)
-#
-#    for i,idx in enumerate(concave1):
-#        ConcavePt = arrPts[idx]
-#        v1 = arrPts[idx]-arrPts[idx-1]
-#        n1 = np.array([-v1[1],v1[0]])
-#        n1 = n1/np.linalg.norm(n1)
-#        P1 = ConcavePt+n1*distt
-#        v2 = arrPts[idx+1]-arrPts[idx]
-#        n2 = np.array([-v2[1],v2[0]])
-#        n2 = n2/np.linalg.norm(n2)
-#        P2 = ConcavePt+n2*dist
-#
-#        plt.plot(*P1.T, color='GREEN', marker='o')
-#        plt.plot(*P2.T, color='BLUE', marker='o')
-
-#
-#    plt.show()

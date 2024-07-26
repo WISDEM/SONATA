@@ -21,7 +21,7 @@ from SONATA.utl_openfast.utl_sonata2beamdyn import convert_structdef_SONATA_to_b
 
 
 
-def beam_struct_eval(flags_dict, loads_dict, vabs_path, cs_pos, job, folder_str, job_str, mu):
+def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, mu):
 
     """
     Analyse, transform, evaluate and plot structural results from VABS and/or ANBAX
@@ -56,207 +56,86 @@ def beam_struct_eval(flags_dict, loads_dict, vabs_path, cs_pos, job, folder_str,
 
     """
 
-    # --- VABS --- #
-    if flags_dict['flag_run_vabs']:
-
-        if flags_dict['flag_recovery'] == True:
-            # Note: first element if grid location ToDo: change setup of loads input to yaml format
-            # [gid location, x1-component, x2-component, x3-component]
-            loads = {
-                "u":    np.array([[0, 1, 1, 1],    [1, 1, 1, 1]]),      # displacement dof
-                "Ci1":  np.array([[0, 1, 0, 0],  [1, 1, 0, 0]]),        # direction cosine matrix
-                "Ci2":  np.array([[0, 0, 1, 0],  [1, 0, 1, 0]]),        # direction cosine matrix
-                "Ci3":  np.array([[0, 0, 0, 1],  [1, 0, 0, 1]]),        # direction cosine matrix
-                "F":    np.array([[0, float(loads_dict["Forces"][0]), float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2])],    [1, float(loads_dict["Forces"][0]), float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2])]]),      # forces, N (F1: axial force; F2,F3: sectional transverse shear forces)
-                "M":    np.array([[0, float(loads_dict["Moments"][0]), float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2])],    [1, float(loads_dict["Moments"][0]), float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2])]]),    # moments, Nm
-                "f":    np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # distributed forces, N/m (including both applied forces and inertial forces)
-                "df":   np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # first derivative
-                "ddf":  np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # second derivative
-                "dddf": np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # third derivative
-                "m":    np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # distributed moments, Nm/m (including both applied forces and inertial moments)
-                "dm":   np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # first derivative
-                "ddm":  np.array([[0, 0, 0, 0],    [1, 0, 0, 0]]),      # second derivative
-                "dddm": np.array([[0, 0, 0, 0],    [1, 0, 0, 0]])}      # third derivative
-
-            job.blade_run_vabs(loads, vabs_path=vabs_path, rm_vabfiles=flags_dict["rm_vabfiles"])  # run VABS
-        else:
-            job.blade_run_vabs(vabs_path=vabs_path, rm_vabfiles=flags_dict["rm_vabfiles"])  # run VABS
-
-
-        if flags_dict['flag_DeamDyn_def_transform']:
-            beam_prop = convert_structdef_SONATA_to_beamdyn(cs_pos, job.beam_properties)  # convert to BeamDyn coord sys def
-            coordsys = 'BeamDyn'
-            str_ext = '_BeamDyn_def'
-        else: 
-            beam_prop = {}
-            beam_prop['beam_section_mass'] = np.zeros([len(cs_pos), 1])
-            beam_prop['beam_stiff'] = np.zeros([len(cs_pos), 6, 6])
-            beam_prop['beam_inertia'] = np.zeros([len(cs_pos), 6, 6])
-            beam_prop['beam_mass_center'] = np.zeros([len(cs_pos), 2])
-            beam_prop['beam_neutral_axes'] = np.zeros([len(cs_pos), 2])
-            beam_prop['beam_geometric_center'] = np.zeros([len(cs_pos), 2])
-            beam_prop['beam_shear_center'] = np.zeros([len(cs_pos), 2])
-            for i in range(len(cs_pos)):
-                beam_prop['beam_section_mass'][i]       = job.beam_properties[i, 1].m00
-                beam_prop['beam_mass_center'][i]        = np.array(job.beam_properties[i, 1].Xm[:])
-                beam_prop['beam_neutral_axes'][i]       = np.array(job.beam_properties[i, 1].Xt[:])
-                beam_prop['beam_geometric_center'][i]   = np.array(job.beam_properties[i, 1].Xg[:])
-                beam_prop['beam_shear_center'][i]       = np.array(job.beam_properties[i, 1].Xs[:])
-                for j in range(6):
-                    beam_prop['beam_stiff'][i, j, :]    = np.array(job.beam_properties[i, 1].TS[j, :])
-                    beam_prop['beam_inertia'][i, j, :]  = np.array(job.beam_properties[i, 1].MM[j, :])
-
-
-            coordsys = 'VABS/SONATA'
-            str_ext = ''
-
-
-        # --------------------------------------- #
-        # Export beam structural properties to csv file
-        if flags_dict['flag_csv_export']:
-            print('STATUS:\t Export csv files with structural blade characeristics from VABS to: ' + folder_str + 'csv_export/')
-            vabs_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, solver='vabs', beam_stiff=beam_prop['beam_stiff'],
-                                          beam_inertia=beam_prop['beam_inertia'], beam_mass_per_length=beam_prop['beam_section_mass'],
-                                          beam_mass_center=beam_prop['beam_mass_center'], beam_neutral_axes=beam_prop['beam_neutral_axes'],
-                                          beam_geometric_center=beam_prop['beam_geometric_center'], beam_shear_center=beam_prop['beam_shear_center'])
-
-        # --------------------------------------- #
-        # write BeamDyn input files
-        if flags_dict['flag_write_BeamDyn'] & flags_dict['flag_DeamDyn_def_transform']:
-            print('STATUS:\t Write BeamDyn input files')
-            refine = int(30/len(cs_pos))  # initiate node refinement parameter
-            write_beamdyn_axis(folder_str, flags_dict, job.yml.get('name'), job.yml.get('components').get('blade'), refine)
-            write_beamdyn_prop(folder_str, flags_dict, job.yml.get('name'), cs_pos, beam_prop['beam_stiff'], beam_prop['beam_inertia'])
-
-        # --- Plot VABS 6x6 stiffness and mass matrices --- #
-        if flags_dict['flag_plot_vabs_struct_characteristics']:
-            # plot inertia matrix
-            save_path = [folder_str + job_str[0:-5] + '_VABS_mass_matrix' + str_ext + '.png']
-            fig_title = 'Mass matrix'
-            plot_beam_props_6by6(cs_pos, beam_prop['beam_inertia'], fig_title, save_path)
-            # plot stiffness matrix
-            save_path = [folder_str + job_str[0:-5] + '_VABS_stiffness_matrix' + str_ext + '.png']
-            fig_title = 'Stiffness matrix'
-            plot_beam_props_6by6(cs_pos, beam_prop['beam_stiff'], fig_title, save_path)
-            # plot axes locations
-            save_path = [folder_str + job_str[0:-5] + '_VABS_axes_locations' + str_ext + '.png']
-            plot_beam_axes(cs_pos, beam_prop['beam_mass_center'], beam_prop['beam_neutral_axes'], beam_prop['beam_geometric_center'], beam_prop['beam_shear_center'], save_path)
-            # plot mass distribution
-            save_path = [folder_str + job_str[0:-5] + '_VABS_mass_distribution' + str_ext + '.png']
-            plot_beam_mass_distribution(cs_pos, beam_prop['beam_section_mass'], save_path)
-
-
-
-
 
     # --- ANBAX --- #
-    if flags_dict['flag_run_anbax']:
-        # --------------------------------------- #
-        # clear var before initializing anbax
-        job.beam_properties = None
+    # --------------------------------------- #
+    # clear var before initializing anbax
+    job.beam_properties = None
 
-
-        # --------------------------------------- #
-        # --- ANBAX --- #
-        if flags_dict['flag_recovery'] == True:
-            loads = {  # sonata coord system input converted to anbax coordinates
-                "F":    np.array([[0, float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2]), float(loads_dict["Forces"][0])],    [1, float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2]), float(loads_dict["Forces"][0])]]),  # forces, N (F1: shear force in x-direction; F2: shear force in y -direction; F3: axial force)
-                "M":    np.array([[0, float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2]), float(loads_dict["Moments"][0])],    [1, float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2]), float(loads_dict["Moments"][0])]])}  # moments, Nm (M1: bending moment around x; M2: bending moment around y; M3: torsional moment)
-
-            job.blade_run_anbax(loads)  # run anbax
-        else:
-            job.blade_run_anbax()  # run anbax
-
-        # init used matrices and arrays
-        anbax_beam_stiff_init = np.zeros([len(cs_pos), 6, 6])
-        anbax_beam_inertia_init = np.zeros([len(cs_pos), 6, 6])
-        anbax_beam_stiff = np.zeros([len(cs_pos), 6, 6])
-        anbax_beam_inertia = np.zeros([len(cs_pos), 6, 6])
-        anbax_beam_section_mass = np.zeros([len(cs_pos), 1])
-
-        # --------------------------------------- #
-        # retrieve & allocate ANBAX results
-        for i in range(len(job.beam_properties)):
-            anbax_beam_section_mass[i] = job.beam_properties[i, 1].m00  # receive mass per unit span
-            for j in range(6):
-                anbax_beam_stiff_init[i, j, :] = np.array(job.beam_properties[i, 1].TS[j, :])  # receive 6x6 timoshenko stiffness matrix
-                anbax_beam_inertia_init[i, j, :] = np.array(job.beam_properties[i, 1].MM[j, :])  # receive 6x6 mass matrix
-
-
-        # --------------------------------------- #
-        #  rotate anbax results from SONATA/VABS def to BeamDyn def coordinate system (for flag_DeamDyn_def_transform = True)
-        if flags_dict['flag_DeamDyn_def_transform']:
-            print('STATUS:\t Transform to BeamDyn coordinates')
-            # B = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])  # transformation matrix
-            B = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])  # transformation matrix
-            T = np.dot(np.identity(3), np.linalg.inv(B))
-            for n_sec in range(len(cs_pos)):
-                anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff_init[n_sec, :, :], T)
-                anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia_init[n_sec, :, :], T)
-            str_ext = '_BeamDyn_def'
-            coordsys = 'BeamDyn'
-
-            print('STATUS:\t Structural characteristics of ANBAX converted from SONATA/VABS to BeamDyn coordinate system definition!')
-        else:
-            anbax_beam_stiff = anbax_beam_stiff_init
-            anbax_beam_inertia = anbax_beam_inertia_init
-            str_ext = ''
-            coordsys = 'VABS/SONATA'
-
-
-        # --------------------------------------- #
-        # Export beam structural properties to csv file
-        if flags_dict['flag_csv_export']:
-            print('STATUS:\t Export csv files with structural blade characeristics from ANBAX to: ' + folder_str + 'csv_export/')
-            anbax_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, solver='anbax', beam_stiff=anbax_beam_stiff,
-                                          beam_inertia=anbax_beam_inertia, beam_mass_per_length=anbax_beam_section_mass)
-
-
-
-        # --------------------------------------- #
-        # Export beam structural properties to csv file
-        # if flags_dict['flag_csv_export']:
-        #     print('STATUS:\t Export csv files with structural blade characeristics from ANBAX to: ' + folder_str + 'csv_export/')
-        #     export_beam_struct_properties(folder_str, job_str, cs_pos, solver='anbax', beam_stiff=anbax_beam_stiff, beam_inertia=anbax_beam_inertia, beam_mass_per_length=anbax_beam_section_mass)
-
-        # ToDo: also export BeamDyn files for results from anbax as soon as the verification is completed
-        # --------------------------------------- #
-        # write BeamDyn input files
-        np.savetxt('anbax_BAR00.txt', np.array([cs_pos, anbax_beam_stiff[:, 3, 3], anbax_beam_stiff[:, 4, 4], anbax_beam_stiff[:, 5, 5], anbax_beam_stiff[:, 2, 2], anbax_beam_inertia[:, 0, 0]]).T)
-        if flags_dict['flag_write_BeamDyn'] & flags_dict['flag_DeamDyn_def_transform']:
-            print('STATUS:\t Write BeamDyn input files')
-            refine = int(30/len(cs_pos))  # initiate node refinement parameter
-            write_beamdyn_axis(folder_str, flags_dict, job.yml.get('name'), job.blade_ref_axis, job.twist)
-            write_beamdyn_prop(folder_str, flags_dict, job.yml.get('name'), cs_pos, anbax_beam_stiff, anbax_beam_inertia, mu)
 
     # --------------------------------------- #
-    # (Optional) - Analytical Rectangle   #
-    # --------------------------------------- #
-    # rect_data_analytical = utls_analytical_rectangle()
+    # --- ANBAX --- #
+    if flags_dict['flag_recovery'] == True:
+        loads = {  # sonata coord system input converted to anbax coordinates
+            "F":    np.array([[0, float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2]), float(loads_dict["Forces"][0])],    [1, float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2]), float(loads_dict["Forces"][0])]]),  # forces, N (F1: shear force in x-direction; F2: shear force in y -direction; F3: axial force)
+            "M":    np.array([[0, float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2]), float(loads_dict["Moments"][0])],    [1, float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2]), float(loads_dict["Moments"][0])]])}  # moments, Nm (M1: bending moment around x; M2: bending moment around y; M3: torsional moment)
 
-            
-
-    # --------------------------------------- #
-    # (Optional) - Code-to-code comparison)   #
-    # --------------------------------------- #
-    if flags_dict['flag_verify_vabs_anbax'] & flags_dict['flag_run_vabs'] & flags_dict['flag_run_anbax']:
-        # ------------------------------------------------------------------------------------------- #
-        # --- Plot VABS and anbax 6x6 stiffness and mass matrices for evaluation and verification --- #
-        # plot inertia matrix
-        save_path = [folder_str + job_str[0:-5] + '_mass_matrix' + str_ext + '.png']
-        fig_title = 'Mass matrix'
-        print('STATUS:	 Plot Mass Matrices - Comparison between VABS (black) and ANBAX (red)')
-        plot_vabs_anbax(cs_pos, beam_prop['beam_inertia'], anbax_beam_inertia, fig_title, save_path)
-        # plot stiffness matrix
-        save_path = [folder_str + job_str[0:-5] + '_stiffness_matrix' + str_ext + '.png']
-        fig_title = 'Stiffness matrix'
-        print('STATUS:	 Plot Stiffness Matrices - Comparison between VABS (black) and ANBAX (red)')
-        plot_vabs_anbax(cs_pos, beam_prop['beam_stiff'], anbax_beam_stiff, fig_title, save_path)
-
+        job.blade_run_anbax(loads)  # run anbax
     else:
-        # optionally account for only analyzing VABS or anbax individually?
-        # this would be the frame work to put that capability up on
-        Warning('Set flag_verify_vabs_anbax = True for plot output !')
+        job.blade_run_anbax()  # run anbax
+
+    # init used matrices and arrays
+    anbax_beam_stiff_init = np.zeros([len(cs_pos), 6, 6])
+    anbax_beam_inertia_init = np.zeros([len(cs_pos), 6, 6])
+    anbax_beam_stiff = np.zeros([len(cs_pos), 6, 6])
+    anbax_beam_inertia = np.zeros([len(cs_pos), 6, 6])
+    anbax_beam_section_mass = np.zeros([len(cs_pos), 1])
+
+    # --------------------------------------- #
+    # retrieve & allocate ANBAX results
+    for i in range(len(job.beam_properties)):
+        anbax_beam_section_mass[i] = job.beam_properties[i, 1].m00  # receive mass per unit span
+        for j in range(6):
+            anbax_beam_stiff_init[i, j, :] = np.array(job.beam_properties[i, 1].TS[j, :])  # receive 6x6 timoshenko stiffness matrix
+            anbax_beam_inertia_init[i, j, :] = np.array(job.beam_properties[i, 1].MM[j, :])  # receive 6x6 mass matrix
+
+
+    # --------------------------------------- #
+    #  rotate anbax results from SONATA/VABS def to BeamDyn def coordinate system (for flag_DeamDyn_def_transform = True)
+    if flags_dict['flag_DeamDyn_def_transform']:
+        print('STATUS:\t Transform to BeamDyn coordinates')
+        # B = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])  # transformation matrix
+        B = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])  # transformation matrix
+        T = np.dot(np.identity(3), np.linalg.inv(B))
+        for n_sec in range(len(cs_pos)):
+            anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff_init[n_sec, :, :], T)
+            anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia_init[n_sec, :, :], T)
+        str_ext = '_BeamDyn_def'
+        coordsys = 'BeamDyn'
+
+        print('STATUS:\t Structural characteristics of ANBAX converted from SONATA/VABS to BeamDyn coordinate system definition!')
+    else:
+        anbax_beam_stiff = anbax_beam_stiff_init
+        anbax_beam_inertia = anbax_beam_inertia_init
+        str_ext = ''
+        coordsys = 'VABS/SONATA'
+
+
+    # --------------------------------------- #
+    # Export beam structural properties to csv file
+    if flags_dict['flag_csv_export']:
+        print('STATUS:\t Export csv files with structural blade characeristics from ANBAX to: ' + folder_str + 'csv_export/')
+        anbax_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, solver='anbax', beam_stiff=anbax_beam_stiff,
+                                        beam_inertia=anbax_beam_inertia, beam_mass_per_length=anbax_beam_section_mass)
+
+
+
+    # --------------------------------------- #
+    # Export beam structural properties to csv file
+    # if flags_dict['flag_csv_export']:
+    #     print('STATUS:\t Export csv files with structural blade characeristics from ANBAX to: ' + folder_str + 'csv_export/')
+    #     export_beam_struct_properties(folder_str, job_str, cs_pos, solver='anbax', beam_stiff=anbax_beam_stiff, beam_inertia=anbax_beam_inertia, beam_mass_per_length=anbax_beam_section_mass)
+
+    # ToDo: also export BeamDyn files for results from anbax as soon as the verification is completed
+    # --------------------------------------- #
+    # write BeamDyn input files
+    np.savetxt('anbax_BAR00.txt', np.array([cs_pos, anbax_beam_stiff[:, 3, 3], anbax_beam_stiff[:, 4, 4], anbax_beam_stiff[:, 5, 5], anbax_beam_stiff[:, 2, 2], anbax_beam_inertia[:, 0, 0]]).T)
+    if flags_dict['flag_write_BeamDyn'] & flags_dict['flag_DeamDyn_def_transform']:
+        print('STATUS:\t Write BeamDyn input files')
+        refine = int(30/len(cs_pos))  # initiate node refinement parameter
+        write_beamdyn_axis(folder_str, flags_dict, job.yml.get('name'), job.blade_ref_axis, job.twist)
+        write_beamdyn_prop(folder_str, flags_dict, job.yml.get('name'), cs_pos, anbax_beam_stiff, anbax_beam_inertia, mu)
+
 
 
 

@@ -1,35 +1,26 @@
 # Third party modules
-import matplotlib.pyplot as plt
 import numpy as np
 from OCC.Core.gp import gp_Pnt2d
 from scipy.spatial import distance
+import matplotlib.pyplot as plt
 
 # First party modules
-from SONATA.cbm.fileIO.CADinput import order_BSplineLst_Head2Tail
 from SONATA.cbm.mesh.mesh_byprojection import \
     mesh_by_projecting_nodes_on_BSplineLst
 from SONATA.cbm.mesh.mesh_improvements import (
-    integrate_leftover_interior_nodes, modify_cornerstyle_one,
     modify_sharp_corners, second_stage_improvements,)
 from SONATA.cbm.mesh.mesh_utils import (
-    equidistant_nodes_on_BSplineLst, find_cells_that_contain_node,
-    find_node_by_ID, grab_nodes_of_cells_on_BSplineLst,
+    equidistant_nodes_on_BSplineLst,
     grab_nodes_on_BSplineLst, merge_nodes_if_too_close,
-    remove_duplicates_from_list_preserving_order, sort_and_reassignID,)
+    remove_duplicates_from_list_preserving_order,)
 from SONATA.cbm.topo.BSplineLst_utils import (BSplineLst_from_dct,
-                                              BSplineLst_Orientation,
                                               ProjectPointOnBSplineLst,
-                                              copy_BSpline, copy_BSplineLst,
+                                              copy_BSpline,
                                               discretize_BSplineLst,
-                                              find_BSplineLst_pos,
                                               findPnt_on_BSplineLst,
-                                              get_BSpline_length,
-                                              get_BSplineLst_length,
-                                              get_BSplineLst_Pnt2d,
-                                              reverse_BSplineLst,
                                               trim_BSplineLst,)
 from SONATA.cbm.topo.cutoff import cutoff_layer
-from SONATA.cbm.topo.layer_utils import get_layer, get_segment, get_web
+from SONATA.cbm.topo.layer_utils import get_layer
 from SONATA.cbm.topo.offset import shp_parallel_offset
 from SONATA.cbm.topo.para_Geom2d_BsplineCurve import (BSplineLst_from_ParaLst,
                                                       ParaLst_from_BSplineLst,)
@@ -115,55 +106,75 @@ class Layer(object):
         self.BSplineLst = BSplineLst_from_ParaLst(self.Para_BSplineLst)
         self.build_wire()
 
-    def copy(self):
-        BSplineLstCopy = copy_BSplineLst(self.BSplineLst)
-        namecopy = self.name + "_Copy"
-        LayerCopy = Layer(self.ID, BSplineLstCopy, self.globalStart, self.globalEnd, self.thickness, self.Orientation, self.MatID, namecopy)
-        return LayerCopy
-
-    def get_length(self):  # Determine and return Legth of Layer self
-        self.length = get_BSplineLst_length(self.BSplineLst)
-        return self.length
-
-    # def get_pnt2d(self,S,start,end): #Return, gp_Pnt2d of argument S of layer self
-    #    return get_BSplineLst_Pnt2d(self.BSplineLst,S,start,end)
-
-    def get_Pnt2d(self, S, LayerLst, WebLst):
-        # print self.ID
-        # print 'cum_ivLst:',self.cumA_ivLst
-        for iv in self.cumA_ivLst:
-            if iv[0] <= S < iv[1]:
-                # print 'Coordinate',S,'is on layer',int(iv[2])
-                break
-
-        print(iv[2])
-        tmp_layer = next((x for x in LayerLst if x.ID == int(iv[2])), None)
-        if not tmp_layer == None:
-            Pnt2d = get_BSplineLst_Pnt2d(tmp_layer.a_BSplineLst, S, tmp_layer.S1, tmp_layer.S2)
-        else:  # Web
-            WebID = -int(iv[2]) - 1
-            Pnt2d = get_BSplineLst_Pnt2d(WebLst[WebID].BSplineLst, S, start=WebLst[WebID].Pos2, end=WebLst[WebID].Pos1)
-
-        return Pnt2d
-
     def build_wire(self):  # Builds TopoDS_Wire from connecting BSplineSegments and returns it
         self.wire = build_wire_from_BSplineLst(self.BSplineLst)
 
-    def trim(self, S1, S2, start, end):  # Trims layer between S1 and S2
-        return trim_BSplineLst(self.BSplineLst, S1, S2, start, end)
+    def display_bsplinelst(self, bsplinelst, color = 'red'):
+        for bspline in bsplinelst:
+            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
+            # Extract points for plotting
+            num_points = 100  # Number of points to plot
+            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
+            x_values = [bspline.Value(u).X() for u in u_values]
+            y_values = [bspline.Value(u).Y() for u in u_values]
+        
+            plt.plot(x_values, y_values, color = color)
 
-    def trim_to_coords(self, start, end):
-        self.BSplineLst = trim_BSplineLst(self.BSplineLst, self.globalStart, self.globalEnd, start, end)
-        return self.BSplineLst
+    # Function to check if two line segments (p1, q1) and (p2, q2) intersect
+    def do_intersect(self, p1, q1, p2, q2):
+        def orientation(p, q, r):
+            val = (float(q[1] - p[1]) * (r[0] - q[0])) - (float(q[0] - p[0]) * (r[1] - q[1]))
+            if val > 0:
+                return 1  # Clockwise
+            elif val < 0:
+                return 2  # Counterclockwise
+            else:
+                return 0  # Collinear
+
+        def on_segment(p, q, r):
+            if min(p[0], q[0]) <= r[0] <= max(p[0], q[0]) and min(p[1], q[1]) <= r[1] <= max(p[1], q[1]):
+                return True
+            return False
+
+        o1 = orientation(p1, q1, p2)
+        o2 = orientation(p1, q1, q2)
+        o3 = orientation(p2, q2, p1)
+        o4 = orientation(p2, q2, q1)
+
+        # General case
+        if o1 != o2 and o3 != o4:
+            return True
+
+        # Special cases
+        if o1 == 0 and on_segment(p1, q1, p2):
+            return True
+        if o2 == 0 and on_segment(p1, q1, q2):
+            return True
+        if o3 == 0 and on_segment(p2, q2, p1):
+            return True
+        if o4 == 0 and on_segment(p2, q2, q1):
+            return True
+
+        return False
+
+    # Function to check if a shape intersects itself
+    def shape_intersects_itself(self, coords):
+        num_points = len(coords)
+        for i in range(num_points - 1):  # Loop to (num_points - 1) to avoid out-of-bounds access
+            for j in range(i + 2, num_points - (1 if i == 0 else 0)):  # Adjusting the range to avoid out-of-bounds
+                if self.do_intersect(coords[i], coords[i + 1], coords[j], coords[(j + 1) % num_points]):
+                    return True
+        return False 
 
     def build_layer(self, l0=1):
         npArray = discretize_BSplineLst(self.Boundary_BSplineLst, 1.2e-6 * l0)
-        # plt.plot(*npArray.T, '.-')
         self.offlinepts = shp_parallel_offset(npArray, self.thickness, self.join_style)
-        # plt.plot(*self.offlinepts.T, 'x-')
-        OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0)
+        if self.shape_intersects_itself(self.offlinepts[1:-2]):
+            print("WARNING: THERE IS AN INTERSECTION IN THE STRUCTURE")
+        OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0, cutoff_style = 2)
         OffsetBSplineLst = cutoff_layer(self.Boundary_BSplineLst, OffsetBSplineLst, self.S1, self.S2, self.cutoff_style)
         self.BSplineLst = OffsetBSplineLst
+        self.display_bsplinelst(self.BSplineLst)
 
     def determine_a_nodes(self, SegmentLst, global_minLen, display=None):
         """ """
@@ -173,7 +184,6 @@ class Layer(object):
                 unmeshed_ids.append(int(seg.LayerLst[-1].ID + 1))
 
         new_a_nodes = []
-        # print self.inverse_ivLst
         for iv_counter, iv in enumerate(self.inverse_ivLst):
             if int(iv[2]) in unmeshed_ids:  # if
                 # print iv, "equidistand nodes on BsplineLst of LayerLst entry"
@@ -285,7 +295,7 @@ class Layer(object):
 
     def set_layer_origin(self):
         """
-        this procedure reorders the self.BSplineLst to and origin if the layer 
+        this procedure reorders the self.BSplineLst to an origin if the layer 
         is closed. The Origin is detected by searching for an orthogonal 
         projection of the StartPoint of the self.Boundary_BSplineLst. If no 
         projection is found it takes the closest neighbor of the discrete 

@@ -6,15 +6,12 @@ Created on Wed Dec 19 09:38:33 2018
 @author: Tobias Pflumm
 """
 # Core Library modules
-import os
 from collections import OrderedDict
 
 # Third party modules
 import numpy as np
 import yaml
 
-# First party modules
-from SONATA.cbm.fileIO.read_yaml_input import clean_filestring
 
 
 class Material(object):
@@ -229,20 +226,6 @@ class OrthotropicMaterial(Material):
         # self.S23 = float(kw.get('S23'))
 
 
-class AnisotropicMaterial(Material):
-    __slots__ = ('C', 'alpha')
-
-    def __init__(self, **kw):
-        kw["orth"] = 2
-        Material.__init__(self, **kw)
-
-        self.C = np.asarray(kw.get('C')).astype(float)
-        self.alpha = np.asarray(kw.get('alpha')).astype(float)
-
-        # TODO: Set Strenght Characteristics according for Anisotropic Material
-        # as second and forth order Strength Tensor Fij, and F
-
-
 def read_materials(yml):
     materials = OrderedDict()
     for i, mat in enumerate(yml):
@@ -260,28 +243,16 @@ def read_materials(yml):
             materials[ID] = IsotropicMaterial(ID=ID, **mat)
         elif mat.get('orth') == 1:
             materials[ID] = OrthotropicMaterial(ID=ID, flag_mat=flag_materials_vector_input, **mat)
-        elif mat.get('orth') == 2:
-            materials[ID] = AnisotropicMaterial(ID=ID, **mat)
-        
     materials = OrderedDict(sorted(materials.items()))
     return materials
 
 
 def find_material(materials, attr, value):
-    return next((x for x in materials.values() if getattr(x, attr) == value), None)
-
+    return next((x for x in materials.values() if getattr(x, attr).lower() == value.lower()), None)
 
 if __name__ == '__main__':
     a = IsotropicMaterial(ID=1, name='iso_mat', rho=0.4, )
     b = OrthotropicMaterial(ID=2, name='orth_mat', rho=0.5)
-    c = AnisotropicMaterial(ID=3, name='aniso_mat', rho=0.6)
-
-    #    materials1 = read_yml_materials('examples/mat_db.yml')
-    #
-    #    with open('jobs/PBortolotti/IEAonshoreWT.yaml', 'r') as myfile:
-    #        inputs  = myfile.read()
-    #    wt_data     = yaml.load(inputs)
-    #    materials2 = read_materials(wt_data['materials'])
 
     with open('jobs/MonteCarlo/UH-60A_adv.yml', 'r') as myfile:
         inputs = myfile.read()

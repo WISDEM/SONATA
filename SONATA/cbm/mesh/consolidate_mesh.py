@@ -15,7 +15,6 @@ import numpy as np
 from OCC.Core.gp import gp_Vec2d
 
 # First party modules
-from SONATA.cbm.display.display_utils import display_custome_shape
 from SONATA.cbm.mesh.cell import Cell
 from SONATA.cbm.mesh.mesh_utils import find_cells_that_contain_node
 

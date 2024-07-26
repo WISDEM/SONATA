@@ -5,44 +5,18 @@ import math
 # Third party modules
 import numpy as np
 # from OCC.AIS import AIS_Shape
-from OCC.Core.BRep import BRep_Builder, BRep_Tool
 from OCC.Core.BRepAdaptor import BRepAdaptor_CompCurve
-from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge,
-                                     BRepBuilderAPI_MakeFace,
-                                     BRepBuilderAPI_MakeWire,)
-from OCC.Core.BRepLib import breplib_BuildCurves3d
 from OCC.Core.GCPnts import GCPnts_AbscissaPoint, GCPnts_QuasiUniformAbscissa
-from OCC.Core.Geom2d import Geom2d_Line
 from OCC.Core.Geom2dAdaptor import Geom2dAdaptor_Curve
 from OCC.Core.Geom2dAPI import Geom2dAPI_ProjectPointOnCurve
-from OCC.Core.gp import gp_Dir2d, gp_Lin2d, gp_Pnt, gp_Pnt2d, gp_Vec2d
-from OCC.Core.Quantity import Quantity_Color
-from OCC.Core.TopoDS import TopoDS_Compound, topods_Edge, topods_Face
-from OCC.Display.SimpleGui import init_display
+from OCC.Core.gp import gp_Pnt2d, gp_Vec2d
 
 # First party modules
-from SONATA.cbm.fileIO.CADinput import (Check_BSplineLst_Head2Tail,
-                                        order_BSplineLst_Head2Tail,)
-from SONATA.cbm.mesh.cell import Cell
 from SONATA.cbm.mesh.node import Node
-from SONATA.cbm.topo.BSplineLst_utils import (BSplineLst_Orientation,
-                                              ProjectPointOnBSplineLst,
+from SONATA.cbm.topo.BSplineLst_utils import (ProjectPointOnBSplineLst,
                                               copy_BSplineLst,
-                                              distance_on_BSplineLst,
-                                              findPnt_on_BSplineLst,
                                               get_BSpline_length,
-                                              get_BSplineLst_length,
-                                              isPnt_on_BSplineLst,
-                                              reverse_BSplineLst,
-                                              set_BSplineLst_to_Origin,
-                                              trim_BSplineLst,
-                                              trim_BSplineLst_by_coordinates,
-                                              trim_BSplineLst_by_Pnt2d,)
-from SONATA.cbm.topo.utils import (Pnt2dLst_to_npArray,
-                                   PolygonArea, calc_angle_between,
-                                   calc_DCT_angles, unique_rows,)
-from SONATA.cbm.topo.wire_utils import (build_wire_from_BSplineLst,
-                                        get_wire_length,)
+                                              reverse_BSplineLst,)
 
 
 def find_cells_that_contain_node(cells, n2find):
@@ -52,12 +26,6 @@ def find_cells_that_contain_node(cells, n2find):
         if n2find in c.nodes:
             disco_cells.append(c)
     return disco_cells
-
-
-def find_node_by_ID(nodes, ID):
-    node = next((n for n in nodes if n.id == ID), None)
-    return node
-
 
 def sort_and_reassignID(mesh):
     # Get all nodes in cells
@@ -267,57 +235,6 @@ def grab_nodes_on_BSplineLst(nodes, BSplineLst, tolerance=1e-5):
     disco_nodes = sorted(disco_nodes, key=lambda Node: (Node.parameters[1], Node.parameters[2]))
     return disco_nodes
 
-
-def determine_a_nodes(mesh, a_BSplineLst, global_minLen, LayerID, factor=5):
-    # is not needed anymore!
-    disco_nodes = grab_nodes_of_cells_on_BSplineLst(mesh, a_BSplineLst)
-    # determine distance between neighboring nodes and discover the remaining segments to discretize mit equidistant points!
-    non_dct_segments = []
-    disco_nodes = sorted(disco_nodes, key=lambda Node: (Node.parameters[1], Node.parameters[2]))
-    para_start = [0, 0]
-    para_end = [len(a_BSplineLst) - 1, a_BSplineLst[-1].LastParameter()]
-
-    # print 'global_minLen:' , global_minLen
-    for j in range(0, len(disco_nodes) + 1):
-        if j == 0:
-            d = distance_on_BSplineLst(a_BSplineLst, para_start, disco_nodes[j].parameters[1:])
-            if d > (factor * global_minLen):
-                non_dct_segments.append([para_start, disco_nodes[j].parameters[1:]])
-                # print 'distance on BSplineLst d:', d
-
-        elif j == len(disco_nodes):
-            #            if closed:
-            #                d = distance_on_BSplineLst(a_BSplineLst,disco_nodes[j-1].Pnt2d, EndPoint, True)
-            #                if d>(factor*global_minLen):
-            #                    non_dct_segments.append([disco_nodes[j-1].Pnt2d, EndPoint])
-
-            d = distance_on_BSplineLst(a_BSplineLst, disco_nodes[j - 1].parameters[1:], para_end)
-            if d > (factor * global_minLen):
-                non_dct_segments.append([disco_nodes[j - 1].parameters[1:], para_end])
-                # print 'distance on BSplineLst d:', d
-        else:
-            d = distance_on_BSplineLst(a_BSplineLst, disco_nodes[j - 1].parameters[1:], disco_nodes[j].parameters[1:])
-            if d > (factor * global_minLen):
-                non_dct_segments.append([disco_nodes[j - 1].parameters[1:], disco_nodes[j].parameters[1:]])
-                # print 'distance on BSplineLst d:', d
-
-    # print len(non_dct_segments), " non_dct_segments found"
-    tmp_nodes = []
-    for seg in non_dct_segments:
-        tmp_BSplineLst = trim_BSplineLst_by_coordinates(a_BSplineLst, seg[0], seg[1])
-        tmp_nodes.extend(equidistant_nodes_on_BSplineLst(tmp_BSplineLst, True, True, True, minLen=global_minLen, LayerID=LayerID))
-
-    # print len(tmp_nodes), "tmp_nodes added"
-    # disco_nodes.extend(grab_nodes_on_BSplineLst(tmp_nodes,a_BSplineLst))
-    # print 'compare disco_nodes with tmp_nodes and return matches', nf
-
-    disco_nodes.extend(grab_nodes_on_BSplineLst(tmp_nodes, a_BSplineLst))
-    disco_nodes = remove_dublicate_nodes(disco_nodes)
-    disco_nodes = sorted(disco_nodes, key=lambda Node: (Node.parameters[1], Node.parameters[2]))
-
-    return disco_nodes
-
-
 def remove_dublicate_nodes(nodes, tol=1e-6):
     # nodes = list(set(nodes))
     nodes = remove_duplicates_from_list_preserving_order(nodes)
@@ -332,7 +249,6 @@ def remove_dublicate_nodes(nodes, tol=1e-6):
     for dn in doublicated_nodes:
         nodes.remove(dn)
     return nodes
-
 
 def remove_duplicates_from_list_preserving_order(seq):
     seen = set()
@@ -370,42 +286,3 @@ def merge_nodes_if_too_close(nodes, BSplineLst, global_minLen, tol=0.1):
     for index in sorted(rm_idx, reverse=True):
         del nodes[index]
     return nodes
-
-
-def export_cells(cells, filename):
-    # Get all nodes in cells
-    nodes = []
-    for cell in cells:
-        for node in cell.nodes:
-            if node not in nodes:
-                nodes.append(node)
-
-    nodes = sorted(nodes, key=lambda Node: (Node.id))
-    for i, n in enumerate(nodes):
-        n.id = i + 1
-    cells = sorted(cells, key=lambda Cell: (Cell.id))
-
-    f = open(filename, "w+")
-    f.write("! Number of Nodes, Number of Elements, Number of Materials \n")
-    f.write("%i\t%i\t%i\n" % (len(nodes), len(cells), 3))
-    f.write("\n! Node number, coordinates x_2, coordinatex x_3 \n")
-
-    for n in nodes:
-        f.write("%i\t\t%f\t%f\n" % (n.id, n.coordinates[0], n.coordinates[1]))
-    f.write("\n! Element number, connectivity \n")
-
-    for c in cells:
-        f.write("%i\t\t" % (c.id))
-        for i in range(0, 9):
-            if i < len(c.nodes):
-                f.write("%i\t" % (c.nodes[i].id))
-            else:
-                f.write("%i\t" % (0))
-        f.write("\n")
-
-    f.write("\n! Element number, Layup orientation \n")
-    for c in cells:
-        f.write("%i\t\t%i\t%.1f\t" % (c.id, c.MatID, c.theta_3))
-        for t in c.theta_1:
-            f.write("%.1f\t" % (t))
-        f.write("\n")

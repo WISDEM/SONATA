@@ -6,17 +6,15 @@ Created on Thu Jan 19 11:01:06 2017
 """
 # Core Library modules
 import os
-import datetime
 import math
-import logging
 # Third party modules
 import matplotlib.pyplot as plt
 import numpy as np
 import scipy.io
-from matplotlib import cm
 from matplotlib.collections import PatchCollection
 from matplotlib.colors import LinearSegmentedColormap
 from matplotlib.patches import Polygon
+import matplotlib.cm as cm
 
 
 # First party modules
@@ -32,18 +30,6 @@ def centroid(points):
     centroid = (sum(x) / len(points), sum(y) / len(points))
     return centroid
 
-
-def plot_nodes(nodes):
-    fig, ax = plt.subplots()
-    nodes_array = []
-    for n in nodes:
-        nodes_array.append([n.coordinates[0], n.coordinates[1]])
-    nodes_array = np.asarray(nodes_array)
-    plt.plot(nodes_array[:, 0], nodes_array[:, 1], ".-")
-    plt.axis("equal")
-    plt.show()
-
-
 def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None, VABSProperties=None, 
               show_element_number=False, show_node_number=False, invert_xaxis = True, lfactor=0.5e-2, **kw):
     
@@ -51,14 +37,13 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
     To be continued...
     
     Parameters
-    ----------
+    ---------- 
     nodes : list
     elements : list
     data : 
     data_name : string
     
     """
-    # print(data_name, max(data))
     alpha = 1.
     if "cmap" in kw:
         cmap = plt.cm.get_cmap(kw["cmap"])
@@ -68,20 +53,12 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         cmap_name = 'my_list'
         cmap = LinearSegmentedColormap.from_list(
         cmap_name, colors, N=6)
-        #cmap.set_over(color='white')
-        #cmap.set_under(color='k')
         
     elif data_name == 'MatID':
         cmap = a=plt.cm.get_cmap()
-        #cmap = plt.cm.get_cmap('cividis')
         # extract all colors from the .jet map
         cmaplist = [cmap(i) for i in range(cmap.N)]
-        # force the first color entry to be grey
-        # cmaplist[0] = (.5, .5, .5, 1.0)
-        # create the new map
-        # cmap = LinearSegmentedColormap.from_list('Custom cmap', cmaplist, max(data))
         cmap = LinearSegmentedColormap.from_list('Custom cmap', cmaplist, max(data))
-        # cmap = 'viridis'
         
     else:
         cmap = plt.cm.get_cmap()
@@ -97,7 +74,7 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         vmax = None
     from palettable.cartocolors.qualitative import Prism_9
     from matplotlib.colors import ListedColormap
-    cmap = ListedColormap(Prism_9.mpl_colors)
+    cmap = cm.get_cmap('tab20',max(data))
 
     fig, ax = plt.subplots(1,1,figsize=(7.5, 6))
     patches = []
@@ -113,7 +90,6 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         polygon = Polygon(array, closed=True, edgecolor="k")
         patches.append(polygon)
     
-    # p = PatchCollection(patches, alpha=alpha, cmap=cmap, edgecolors = 'k')
     p = PatchCollection(patches, alpha=alpha, cmap=cmap, edgecolors = 'k', linewidths=0.2)
     p.set_array(data)
     p.set_clim(vmin, vmax)
@@ -124,13 +100,11 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
 
     if data_name == "MatID":
         cbar.set_ticks(np.linspace(1, max(data), max(data)))
-        # cbar.set_ticklabels(np.linspace(1, max(data), max(data)))
         cbar_label = []
         for cbar_label_index in range(max(data)):
             cbar_label.append(materials[cbar_label_index+1].name)
-        cbar.set_ticklabels(cbar_label)
-        # cbar.set_ticklabels(['mat1', 'mat2', 'mat3', 'mat4', 'mat5', 'mat6'])
         p.set_clim(0.5, max(data)+0.5)
+        cbar.set_ticklabels(cbar_label)
 
     elif data_name[0:6] == 'stress':
         cbar.ax.set_ylabel('Stress, $\mathrm{Nm^2}$')
@@ -145,24 +119,14 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
             dy = lfactor*math.sin(math.radians(theta_11[i]))
             ax.arrow(cent[0], cent[1], dx, dy, width = 0.01e-2, head_width=0.1e-2, head_length=0.1e-2, fc='k', ec='k')
         
-    #ax.scatter(nodes[:,0],nodes[:,1],c='k',)
     plt.axis('equal')
-    #ax.set_ylim(bottom=-3.5, top=3.5)
-    #ax.set_xlim(left=-3.5, right=3.5)
+
 
     if title!=None:
         ax.set_title(title, fontweight = 'bold')
     ax.set_xlabel('x, m', fontweight = 'bold')
     ax.set_ylabel('y, m', fontweight = 'bold')
-    plt.grid(color=[0.8,0.8,0.8], linestyle='--')
-
-    #plot coordinate system.
-    # cslength=0.015
-    # ax.arrow(0, 0, cslength, 0, color='lime')
-    # ax.arrow(0, 0, 0, cslength, color='deepskyblue')
-
-    # ax.annotate(r'$x_2$', (cslength,0),fontsize=10, color = 'lime')
-    # ax.annotate(r'$x_3$', (0,cslength),fontsize=10, color='deepskyblue')
+    # plt.grid(color=[0.8,0.8,0.8], linestyle='--')
 
     ##display element number
     if show_element_number == True:
@@ -174,40 +138,26 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         for i, item in enumerate(nodes):
             ax.annotate(i + 1, (item[0], item[1]), color="red")
 
-    if VABSProperties != None:
-        pass
-        (CG,) = plt.plot(VABSProperties.Xm[0], VABSProperties.Xm[1], "ro", label="CG: Mass Center")
-        # ax.annotate('CG', (VABSProperties.Xm2,VABSProperties.Xm3),fontsize=20)
-        (NA,) = plt.plot(VABSProperties.Xt[0], VABSProperties.Xt[1], "gs", label="NA: Neutral Axes")
-        # ax.annotate('NA', (VABSProperties.Xt2,VABSProperties.Xt3),fontsize=20)
-        try:
-            (GC,) = plt.plot(VABSProperties.Xg[0], VABSProperties.Xg[1], "b^", label="GC: Geometric Center")
-            # ax.annotate('GC', (VABSProperties.Xg2,VABSProperties.Xg3),fontsize=20)
-            plt.legend(handles=[CG, GC, NA])
-        except:
-            plt.legend(handles=[CG, NA])
+    # if VABSProperties != None:
+    #     pass
+    #     (CG,) = plt.plot(VABSProperties.Xm[0], VABSProperties.Xm[1], "ro", label="CG: Mass Center")
+    #     # ax.annotate('CG', (VABSProperties.Xm2,VABSProperties.Xm3),fontsize=20)
+    #     (NA,) = plt.plot(VABSProperties.Xt[0], VABSProperties.Xt[1], "gs", label="NA: Neutral Axes")
+    #     # ax.annotate('NA', (VABSProperties.Xt2,VABSProperties.Xt3),fontsize=20)
+    #     try:
+    #         (GC,) = plt.plot(VABSProperties.Xg[0], VABSProperties.Xg[1], "b^", label="GC: Geometric Center")
+    #         # ax.annotate('GC', (VABSProperties.Xg2,VABSProperties.Xg3),fontsize=20)
+    #         plt.legend(handles=[CG, GC, NA])
+    #     except:
+    #         plt.legend(handles=[CG, NA])
 
-
-        #        #place a text box in upper left in axes coords
-        #        textstr = 'mass per unit span \t\t\t\t\t = $%.2f$ [g/mm]\nmass moments of intertia about x1 axis \t= $%.2f$ [g/mm2]'%(VABSProperties.MpUS,VABSProperties.I1)
-        #        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-        #        ax.text(0.02, 0.97, textstr, transform=ax.transAxes, fontsize=10,
-        #                verticalalignment='top', bbox=props)
-        #
-        #
-        #        #place a text box in upper left in axes coords
-        #        textstr = 'Classical Stiffness Matrix:\n'+np.array2string(VABSProperties.CS, precision=2, separator=',  ')
-        #        props = dict(boxstyle='round', facecolor='white', alpha=0.5)
-        #        ax.text(0.02, 0.12, textstr, transform=ax.transAxes, fontsize=10,
-        #                verticalalignment='top', bbox=props)
-
-        if isinstance(VABSProperties.Xs, np.ndarray):
-            (SC,) = plt.plot(VABSProperties.Xs[0], VABSProperties.Xs[1], "kD", label="SC: Generalized Shear Center")
-            # ax.annotate('SC', (VABSProperties.Xs2,VABSProperties.Xs3),fontsize=20)
-            try:
-                plt.legend(handles=[CG, GC, NA, SC])
-            except:
-                plt.legend(handles=[CG, NA, SC])
+    #     if isinstance(VABSProperties.Xs, np.ndarray):
+    #         (SC,) = plt.plot(VABSProperties.Xs[0], VABSProperties.Xs[1], "kD", label="SC: Generalized Shear Center")
+    #         # ax.annotate('SC', (VABSProperties.Xs2,VABSProperties.Xs3),fontsize=20)
+    #         try:
+    #             plt.legend(handles=[CG, GC, NA, SC])
+    #         except:
+    #             plt.legend(handles=[CG, NA, SC])
 
     if invert_xaxis:
         ax.invert_xaxis()
@@ -218,7 +168,6 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
 
     return (fig,ax)
     
-
 def plot_cells(cells,nodes, attr1, materials, VABSProperties=None, title='None', plotTheta11=False, plotDisplacement=False, **kw):
     """
     

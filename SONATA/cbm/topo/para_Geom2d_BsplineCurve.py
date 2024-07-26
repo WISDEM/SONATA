@@ -9,9 +9,7 @@ from OCC.Display.SimpleGui import init_display
 
 # First party modules
 # Own Libraries:
-from SONATA.cbm.topo.utils import (TColgp_Array1OfPnt2d_from_nparray,
-                                   TColgp_Array1OfPnt2d_to_array,
-                                   TColStd_to_array, _Tcol_dim_1,)
+from SONATA.cbm.topo.utils import (_Tcol_dim_1,)
 
 # ==============================================================================
 # STORE BSPLINE INFORMATION:

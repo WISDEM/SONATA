@@ -10,17 +10,12 @@ import numpy as np
 from scipy.interpolate import PchipInterpolator
 from collections import OrderedDict
 import yaml
-# from jsonschema import validate
-import matplotlib.pyplot as plt
 
 
 if __name__ == '__main__':
     os.chdir('../..')
 
 from SONATA.cbm.classCBMConfig import CBMConfig
-from SONATA.utl_openmdao.utl_openmdao import calc_axis_intersection
-
-# from jobs.RFeil.utls.utls_openmdao import calc_axis_intersection
 
 
 def arc_length(x, y):
@@ -74,15 +69,20 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     """
 
     # Segments and webs
-
-    tmp0        = byml.get('internal_structure_2d_fem').get('webs')
+    unordered_webs        = byml.get('internal_structure_2d_fem').get('webs')
     x           = cs_pos # Non dimensional span position of the stations
 
-    if tmp0 == None:
+    if unordered_webs == None:
         n_webs = 0
     else:
-        n_webs  = len(tmp0) # Max number of webs along span
+        n_webs  = len(unordered_webs) # Max number of webs along span
     web_exist  = np.zeros((len(x), n_webs), dtype=int) # Flag to set whether webs have non zero thickness, initialized at 0
+
+    # Webs need to be defined from LE to TE
+    # Sorting webs to correct order
+    values_to_sort = [web['start_nd_arc']['values'][0] for web in unordered_webs]
+    web_order = sorted(range(len(values_to_sort)), key=lambda i: values_to_sort[i], reverse=True)
+    tmp0 = [unordered_webs[i] for i in web_order]
 
     tmp2    = [dict([('position', x[n])]) for n in range(len(x))]
     id_webs = [dict() for n in range(len(x))]
@@ -176,10 +176,6 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 if 'end_nd_arc' in sec.keys():
                     set_interp = PchipInterpolator(sec['end_nd_arc']['grid'], sec['end_nd_arc']['values'])
                     end_i     = float(set_interp(x[i]))
-                    # if end_i>0.9 and id_layer>0:
-                    #     for kk in range(len(tmp2[i]['segments'][0]['layup'])):
-                    #         if end_i == tmp2[i]['segments'][0]['layup'][kk]['start']:
-                    #             start_i -= 1.e-2
                 else:
                     end_i = 1
 
@@ -208,40 +204,18 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                             tmp2[i]['segments'][0]['layup'][id_layer]['orientation'] = 0.
                             
                         # # Check consistency
-                        # if tmp2[i]['segments'][0]['layup'][id_layer]['end'] < tmp2[i]['segments'][0]['layup'][id_layer]['start']:
-                        #     exit('WARNING: Layer ' + tmp2[i]['segments'][0]['layup'][id_layer]['name'] + ' ends before it starts. Check the yaml input file!!')
                         ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
                         adhesive_extent[i] = min([0.04, 0.04 / ch])
                         if x[i] > span_adhesive and tmp2[i]['segments'][0]['layup'][id_layer]['start'] < adhesive_extent[i] and tmp2[i]['segments'][0]['layup'][id_layer]['end'] < 0.5:
                             tmp2[i]['segments'][0]['layup'][id_layer]['start'] = adhesive_extent[i] 
                         elif x[i] > span_adhesive and tmp2[i]['segments'][0]['layup'][id_layer]['end'] > 1. - adhesive_extent[i] and tmp2[i]['segments'][0]['layup'][id_layer]['start'] > 0.5:
                             tmp2[i]['segments'][0]['layup'][id_layer]['end'] = 1. - adhesive_extent[i]
-
-                            # old_start = tmp2[i]['segments'][0]['layup'][id_layer]['start']
-                            # old_end   = tmp2[i]['segments'][0]['layup'][id_layer]['end']
-                            # if old_start < 1. - adhesive_extent[i]:
-                            #     tmp2[i]['segments'][0]['layup'][id_layer]['end']   = old_end
-                            #     tmp2[i]['segments'][0]['layup'][id_layer]['start'] = adhesive_extent[i]
-                            # else:
-                            #     exit('ERROR: The converter is not modeling well the trailing edge')
-
-                            # tmp2[i]['segments'][0]['layup'].append({})
-                            # tmp2[i]['segments'][0]['layup'][id_layer + 1]['name']      = tmp2[i]['segments'][0]['layup'][id_layer]['name'] + '_2'
-                            # tmp2[i]['segments'][0]['layup'][id_layer + 1]['material_name'] = tmp2[i]['segments'][0]['layup'][id_layer]['material_name']
-                            # tmp2[i]['segments'][0]['layup'][id_layer + 1]['thickness']     = tmp2[i]['segments'][0]['layup'][id_layer]['thickness']
-                            # tmp2[i]['segments'][0]['layup'][id_layer + 1]['orientation'] = tmp2[i]['segments'][0]['layup'][id_layer]['orientation']
-                            # if old_end > adhesive_extent[i]:
-                            #     tmp2[i]['segments'][0]['layup'][id_layer + 1]['start'] = old_start
-                            #     tmp2[i]['segments'][0]['layup'][id_layer + 1]['end']   = 1. - adhesive_extent[i]
-                            # else:
-                            #     exit('ERROR: The converter is not modeling well the trailing edge')
-                            # id_layer = id_layer + 1
                         
                         id_layer = id_layer + 1
                     else:  # if web in sec.keys():
 
 
-                        id_seg          = id_webs[i][(sec['web'])]['id']
+                        id_seg = id_webs[i][(sec['web'])]['id']
                         for id_mat in range(1,len(materials)+1):
                             if sec['material'] == materials[id_mat].name:
 
@@ -317,64 +291,6 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
 
                                     web_filler_index = False  #  after completing the te part (this web is finished now!), prepare for next web
 
-
-
-
-
-
-
-
-
-                            # ========= OLD without split yaml files ========= #
-                            #  NEW YAML FILES INCLUDE ALREADY SEPARATED WEBS  #
-                                #
-                                # if tmp2[i]['segments'][id_seg - 1]['layup'] != [{}]:
-                                #     tmp2[i]['segments'][id_seg - 1]['layup'].append({})
-                                #     id_layer_web_le[i] = id_layer_web_le[i] + 1
-                                #
-                                # if tmp2[i]['segments'][id_seg + 1]['layup'] != [{}]:
-                                #     tmp2[i]['segments'][id_seg + 1]['layup'].append({})
-                                #     id_layer_web_te[i] = id_layer_web_te[i] + 1
-                                #
-                                #
-                                #
-                                # tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['name'] = 'web_' + str(int(id_seg/2)) + '_' + sec['material']  + '_' + str(x[i])
-                                # tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['name'] = 'web_' + str(int(id_seg/2)) + '_' + sec['material']  + '_' + str(x[i])
-                                #
-                                # tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['material_name'] = sec['material']
-                                # tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['material_name'] = sec['material']
-                                #
-                                # set_interp = PchipInterpolator(sec['thickness']['grid'], sec['thickness']['values'])
-                                # tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['thickness'] = set_interp(x[i]) * 0.5
-                                # tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['thickness'] = set_interp(x[i]) * 0.5
-                                #
-                                # flange = 0.01
-                                #
-                                # tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['start'] = id_webs[i][(sec['web'])]['end_nd_arc'] - flange
-                                # tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['end']   = id_webs[i][(sec['web'])]['start_nd_arc'] + flange
-                                #
-                                #
-                                # tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['start'] = id_webs[i][(sec['web'])]['start_nd_arc'] - flange
-                                # tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['end']   = id_webs[i][(sec['web'])]['end_nd_arc'] + flange
-                                #
-                                # if 'fiber_orientation' in sec.keys():
-                                #     set_interp = PchipInterpolator(sec['fiber_orientation']['grid'], sec['fiber_orientation']['values'])
-                                #     tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['orientation'] = set_interp(x[i])
-                                #     tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['orientation'] = set_interp(x[i])
-                                # else:
-                                #     tmp2[i]['segments'][id_seg - 1]['layup'][id_layer_web_le[i]]['orientation'] = 0.
-                                #     tmp2[i]['segments'][id_seg + 1]['layup'][id_layer_web_te[i]]['orientation'] = 0.
-        # if x[i] > span_adhesive and n_webs > 0:
-        if x[i] > span_adhesive and len(tmp2[i]['segments']) > 1:
-            # id_seg = n_webs*2 + 2
-            tmp2[i]['segments'][-1]['filler'] = 'Adhesive'
-            tmp2[i]['segments'][-1]['layup'][0]['name'] = 'dummy'
-            tmp2[i]['segments'][-1]['layup'][0]['material_name'] = 'Adhesive'
-            tmp2[i]['segments'][-1]['layup'][0]['thickness'] = 5.e-4
-            tmp2[i]['segments'][-1]['layup'][0]['start'] = 0.0
-            tmp2[i]['segments'][-1]['layup'][0]['end'] = 1.0
-            tmp2[i]['segments'][-1]['layup'][0]['orientation'] = 0.0
-
     # Split webs for determining the
     # print(tmp2)
     # exit()
@@ -396,18 +312,18 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 if np.mean(profile[0:id_le, 1]) < 0:
                     profile     = np.flip(profile,0)
 
-                # checks for flatback airfoils
-                # profile[0,0] = 1.
-                # profile[0,1] = 1.e-4
-                # profile[-1,0] = 1.
-                # profile[-1,1] = -1.e-4
-                if len(np.where(profile[:,0] == 1.)[0]) > 2:
-                    profile = profile[:np.where(profile[:,0]==1.)[0][2] , :]
-
-                # if len(profile[:,0]) != len(np.unique(profile[:,0])):
-                #     raise Exception('Airfoil at station {:d} does not have unique x points'.format(id_profile))
+                # if len(np.where(profile[:,0] == 1.)[0]) > 2:
+                #     profile = profile[:np.where(profile[:,0]==1.)[0][2] , :]
+                #     print(profile)
 
                 profile_curve   = arc_length(profile[:,0], profile[:,1]) / arc_length(profile[:,0], profile[:,1])[-1]
+
+                # Making sure profile_curve is strictly increasing so PchipInterpolator can be used
+                increment = 0.00001
+                for k in range(1,len(profile_curve)):
+                    while profile_curve[k] <= profile_curve[k-1]:
+                        profile_curve[k] += increment
+
 
                 set_interp      = PchipInterpolator(profile_curve, profile[:,0])
                 x_web_start     = set_interp(start)
@@ -425,10 +341,25 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 else:
                     offset_edge = 1
 
-                set_interp      = PchipInterpolator(np.flip(profile[offset_edge:id_le - offset_edge,0]), np.flip(profile_curve[offset_edge:id_le - offset_edge]))
+
+                flipped_profile = np.flip(profile[offset_edge:id_le - offset_edge,0])
+                # Making sure flipped_profile is strictly increasing so PchipInterpolator can be used
+                increment = 0.00001
+                for k in range(1,len(flipped_profile)):
+                    while flipped_profile[k] <= flipped_profile[k-1]:
+                        flipped_profile[k] += increment
+
+                set_interp      = PchipInterpolator(flipped_profile, np.flip(profile_curve[offset_edge:id_le - offset_edge]))
                 web_start_le , web_start_te    = set_interp([x_web_start_le , x_web_start_te])
 
-                set_interp      = PchipInterpolator(profile[id_le + offset_edge:-offset_edge,0], profile_curve[id_le + offset_edge:-offset_edge])
+                unflipped_profile = profile[id_le + offset_edge:-offset_edge,0]
+                # Making sure profile_curve is strictly increasing so PchipInterpolator can be used
+                increment = 0.00001
+                for k in range(1,len(unflipped_profile)):
+                    while unflipped_profile[k] <= unflipped_profile[k-1]:
+                        unflipped_profile[k] += increment
+
+                set_interp      = PchipInterpolator(unflipped_profile, profile_curve[id_le + offset_edge:-offset_edge])
                 web_end_le , web_end_te        = set_interp([x_web_end_le , x_web_end_te])
 
 
@@ -462,6 +393,25 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
         tmp = {'webs':list(w.values()), 'segments':seg['segments'], 'position':x, 'mesh_resolution':mesh_resolution}
         lst.append([x, CBMConfig(tmp, materials)])
 
+    # Finding the minimum start and maximum end value for the layers in each starting segment and assigning starts
+    # and ends within a tolerance to 0 or 1 respectively
+    for i in range(len(lst)):
+        starts = [lst[i][1].segments[0]['Layup'][j][0] for j in range(len(lst[i][1].segments[0]['Layup']))]
+        ends = [lst[i][1].segments[0]['Layup'][j][1] for j in range(len(lst[i][1].segments[0]['Layup']))]
+        min_start = min(starts)
+        max_end = max(ends)
+        if min_start != 0 or max_end != 1:
+            print("WARNING: No closed section found in segment 0. Segment has been closed.")
+            if lst[i][0]<0.6 or lst[i][0] == 1:
+                tolerance = 1e-4
+            else:
+                tolerance = .05
+            for j in range(len(lst[i][1].segments[0]['Layup'])):
+                if lst[i][1].segments[0]['Layup'][j][0] <= min_start + tolerance:
+                    lst[i][1].segments[0]['Layup'][j][0] = 0
+                if lst[i][1].segments[0]['Layup'][j][1] >= max_end - tolerance:
+                    lst[i][1].segments[0]['Layup'][j][1] = 1
+    
     return np.asarray(lst)
 
 

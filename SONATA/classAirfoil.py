@@ -9,45 +9,20 @@ Created on Wed Dec 19 09:38:49 2018
 import itertools
 import numbers
 import os
-from collections import OrderedDict
-from urllib.request import urlopen
 
 # Third party modules
 import matplotlib.pyplot as plt
 import numpy as np
-from OCC.Core.BRepBuilderAPI import (BRepBuilderAPI_MakeEdge,
-                                     BRepBuilderAPI_MakeWire,)
-from OCC.Core.Geom import Geom_BezierCurve, Geom_Plane
-from OCC.Core.Geom2dAPI import Geom2dAPI_Interpolate
-from OCC.Core.GeomAPI import GeomAPI_Interpolate
 # PythonOCC Libraries
-from OCC.Core.gp import gp_Ax1, gp_Dir, gp_Pln, gp_Pnt, gp_Trsf, gp_Vec
-from OCC.Display.SimpleGui import init_display
+from OCC.Core.gp import gp_Pnt, gp_Vec
 
 # First party modules
-from SONATA.cbm.display.display_utils import (display_config,
-                                              display_custome_shape,
-                                              display_SONATA_SegmentLst,
-                                              export_to_BMP, export_to_JPEG,
-                                              export_to_PNG, export_to_TIFF,
-                                              show_coordinate_system,
-                                              transform_wire_2to3d,)
-from SONATA.cbm.topo.BSplineLst_utils import (BSplineLst_from_dct,
-                                              copy_BSplineLst,
-                                              equidistant_D1_on_BSplineLst,
-                                              BSplineLst_Orientation,)
-from SONATA.cbm.topo.utils import (PntLst_to_npArray,
-                                   TColgp_HArray1OfPnt2d_from_nparray,
-                                   TColgp_HArray1OfPnt_from_nparray,
-                                   point_list_to_TColgp_Array1OfPnt,)
+from SONATA.cbm.display.display_utils import (display_config,)
+from SONATA.cbm.topo.BSplineLst_utils import (BSplineLst_from_dct,)
+from SONATA.cbm.topo.utils import (PntLst_to_npArray,)
 from SONATA.cbm.topo.wire_utils import (build_wire_from_BSplineLst,
-                                        build_wire_from_BSplineLst2,
                                         equidistant_Points_on_wire,
-                                        get_wire_length, rotate_wire,
-                                        scale_wire, translate_wire, trsf_wire,)
-
-from SONATA.cbm.fileIO.CADinput import Check_BSplineLst_Head2Tail
-from SONATA.classPolar import Polar
+                                        trsf_wire,)
 from SONATA.utl.trsf import trsf_af_to_blfr
 
 # SONATA modules:
@@ -107,9 +82,6 @@ class Airfoil(object):
         if isinstance(coordinates, np.ndarray) and coordinates.shape[1] == 2:
             self.coordinates = coordinates
 
-        if isinstance(polars, list) and all(isinstance(p, Polar) for p in polars):
-            self.polars = polars
-
         if isinstance(relative_thickness, numbers.Real) and relative_thickness >= 0:
             self.relative_thickness = relative_thickness
 
@@ -135,37 +107,14 @@ class Airfoil(object):
         self.name = yml["name"]
         self.relative_thickness = yml.get("relative_thickness")
 
-        if yml["coordinates"]:
-            self.coordinates = np.asarray([yml["coordinates"]["x"], yml["coordinates"]["y"]], dtype=float).T
-        else:
-            self.get_UIUCCoordinates()
+        self.coordinates = np.asarray([yml["coordinates"]["x"], yml["coordinates"]["y"]], dtype=float).T
+        # Shifting coordinates such that the y values of the first and last coordinate average to 0
+        yshift = (self.coordinates[0][1]+self.coordinates[-1][1])/2
+        for i in range(self.coordinates.shape[0]):
+            self.coordinates[i][1] = self.coordinates[i][1]-yshift
+        print(" ")
 
-        if self.polars:
-            self.polars = [Polar(p) for p in yml["polars"]]
-        else:
-            self.polars = None
 
-    def get_UIUCCoordinates(self):
-        url = "http://m-selig.ae.illinois.edu/ads/coord_seligFmt/%s.dat" % self.name
-        try:
-            with urlopen(url) as f:
-                self.coordinates = np.loadtxt(f, skiprows=1)
-        except:
-            print("HTTPError: Not Found")
-
-    def write_yaml_airfoil(self):
-        """
-        writes the airfoil class attributes to a dictionary
-        """
-        tmp = {}
-        tmp["name"] = self.name
-        tmp["coordinates"] = dict(zip(("x", "y"), self.coordinates.T.tolist()))
-        tmp["relative_thickness"] = self.relative_thickness
-        if self.polars != None:
-            tmp["polars"] = [p.write_yaml_airfoil() for p in self.polars]
-        else:
-            tmp["polars"] = None
-        return tmp
 
     def gen_OCCtopo(self, angular_deflection = 30 ):
         """
@@ -210,57 +159,65 @@ class Airfoil(object):
         
         """
         Trsf = trsf_af_to_blfr(loc, pa_loc, chord, twist)
-
         if self.wire == None or self.BSplineLst == None:
             self.gen_OCCtopo()
 
         wire = trsf_wire(self.wire, Trsf)
         tmp_pnt = gp_Pnt(self.te_coordinates[0], self.te_coordinates[1], 0)
         te_pnt = tmp_pnt.Transformed(Trsf)
-        #        print(self.BSplineLst)
-        #        BSplineLst_tmp = copy_BSplineLst(self.BSplineLst)
-        #        print(BSplineLst_tmp)
-        #        [s.Transform(Trsf) for s in BSplineLst_tmp]
-        # print(BSplineLst)
         return (wire, te_pnt)  # bspline, nodes, normals
+    
+    def check_flatback(self, coords):
+        count = 0
+        for x in coords[:,0]:
+            if x > 0.9:
+                count +=1
+        if count > 18:
+            print("\n\n\nFLATBACK\n\n\n")
+            return True
+        else:
+            print("\n\n\nNOT A FLATBACK\n\n\n")
+            return False
 
-    def gen_wopwop_dist(self, NbPoints=50, divide_surf=True):
-        """
-        distributes points and normal vectors on the upper and lower part of 
-        the airfoil. Subsequently those points are transformed to the blade 
-        reference frame.
+    def normalize_points(self, shape, num_points):
+        """Normalize the number of points in the shape to num_points."""
+        x = shape[:, 0]
+        y = shape[:, 1]
         
+        # Parameterize the original shape
+        t = np.linspace(0, 1, len(x))
+        t_new = np.linspace(0, 1, num_points)
         
-        Parameters
-        ----------
+        # Interpolate x and y coordinates
+        x_new = np.interp(t_new, t, x)
+        y_new = np.interp(t_new, t, y)
         
-        
-        """
+        return np.vstack((x_new, y_new)).T
 
-        data = self.coordinates
+    def interpolate_shapes(self, af1, af2, t):
+        """Interpolate between shape1 and shape2 based on parameter t (0 <= t <= 1)."""
+        # Ensure both shapes have the same number of points
+        num_points = max(len(af1), len(af2))
+        af1 = self.normalize_points(af1, num_points)
+        af2 = self.normalize_points(af2, num_points)
 
-        le_idx = np.argmin(np.linalg.norm(data, axis=1))
-        up_data = data[0 : le_idx + 1]
-        lo_data = data[le_idx:-1]
+        # Interpolate between shapes
+        interpolated_shape = (1 - t) * af1 + t * af2
 
-        up_BSplineLst = BSplineLst_from_dct(up_data, angular_deflection=45, closed=False, tol_interp=1e-5, twoD=True)
-        lo_BSplineLst = BSplineLst_from_dct(lo_data, angular_deflection=45, closed=False, tol_interp=1e-5, twoD=True)
+        # Adjust to maintain the property that the first and last y values average to 0
+        avg_y = (interpolated_shape[0, 1] + interpolated_shape[-1, 1]) / 2
+        interpolated_shape[0, 1] -= avg_y
+        interpolated_shape[-1, 1] -= avg_y
 
-        up_pnts2d, up_vecs2d = equidistant_D1_on_BSplineLst(up_BSplineLst, NbPoints)
-        lo_pnts2d, lo_vecs2d = equidistant_D1_on_BSplineLst(lo_BSplineLst, NbPoints)
-
-        BSplineLst2d = up_BSplineLst + lo_BSplineLst
-        pnts2d = up_pnts2d + lo_pnts2d
-        vecs2d = up_vecs2d + lo_vecs2d
-
-        return (BSplineLst2d, pnts2d, vecs2d)
-
-    def transformed(self, airfoil2, k=0.5, n=200):
+        return interpolated_shape
+    
+    def transformed(self, airfoil2, k=0.5):
         """
         Performs and linear interpolation of the airfoil with another airfoil 
-        by translating equidistant points in the direction of vector v. 
-        The magnitude of the translation is the vector's magnitude multiplied 
-        by factor k.
+        by adding points to the airfoil with less coordinate pairs until the 
+        airfoils have the same number of points. A condition is then applied 
+        forcing the first and last y values of the interpolated coordinates
+        to average to 0.
     
         Parameters
         ----------
@@ -269,8 +226,6 @@ class Airfoil(object):
         k : float
             the vectors magnitude factor. k=0: the transformed airfoil remains 
             the airfoil. k=1: the transformed airfoil will become airfoil2
-        n : int
-            number of discretization points.
         
         Returns:
         ----------
@@ -278,107 +233,14 @@ class Airfoil(object):
             with the name = TRF_airfoil1_airfoil2_k
             
         """
-        # check if wire exists, else create it
-        if self.wire == None:
-            self.gen_OCCtopo()
-        if airfoil2.wire == None:
-            airfoil2.gen_OCCtopo()
-
-        p1_lst = equidistant_Points_on_wire(self.wire, n)
-        p2_lst = equidistant_Points_on_wire(airfoil2.wire, n)
-        v_lst = [gp_Vec(p1, p2) for p1, p2 in zip(p1_lst, p2_lst)]
-
-        pres = []
-        for i, p in enumerate(p1_lst):
-            pres.append(p.Translated(v_lst[i].Multiplied(k)))
 
         trf_af = Airfoil()
         str_k = "%.3f" % k
         trf_af.name = "TRF_" + self.name + "_" + airfoil2.name + "_" + str_k.replace(".", "")
-        trf_af.coordinates = PntLst_to_npArray(pres)[:, :2]
+        trf_af.coordinates = self.interpolate_shapes(self.coordinates, airfoil2.coordinates, k)
+
         return trf_af
 
-    def plot_polars(
-        self, xlim=(-24, 32), markercycle=".>^+*",
-    ):
-        """
-        plots the airfoil coordinates and the stored polars. 
-        
-        Parameters
-        ----------
-        xlim : tuple
-            The user can define a lower and upper x-axis limit in deg.
-        markercycle : str
-            A string of marker symbols to be used when plotting multiple polars
-            the markers would be repeated, if more polars that markers are set.
-
-        """
-        fig, ax = plt.subplots(2, 2)
-        fig.suptitle(self.name, fontsize=16)
-        fig.subplots_adjust(wspace=0.25, hspace=0.25)
-
-        # plot airfoil coordinates
-        ax[0][0].plot(self.coordinates[:, 0], self.coordinates[:, 1], ".k--")
-        ax[0][0].axis("equal")
-        ax[0][0].set_xlabel("x/c")
-        ax[0][0].set_ylabel("y/c")
-
-        if self.polars:
-            for po, ms in zip(self.polars, itertools.cycle(markercycle)):
-                label = po.configuration + ", Re: " + "{:.2e}".format(po.re) + ", Ma: " + str(po.ma)
-
-                ax[0][1].plot(np.rad2deg(po.c_l[:, 0]), po.c_l[:, 1], label=label, marker=ms)
-                ax[0][1].set_ylabel(r"Section lift coefficient, $c_l$")
-
-                ax[1][0].plot(np.rad2deg(po.c_d[:, 0]), po.c_d[:, 1], label=label, marker=ms)
-                ax[1][0].set_ylabel(r"Section drag coefficient, $c_d$")
-
-                ax[1][1].plot(np.rad2deg(po.c_m[:, 0]), po.c_m[:, 1], label=label, marker=ms)
-                ax[1][1].set_ylabel(r"Section drag coefficient, $c_d$")
-
-                # Formatting
-                for i, j in ((0, 1), (1, 0), (1, 1)):
-                    ax[i][j].set_xlabel(r"Section angle of attack, $\alpha$, deg")
-                    ax[i][j].set_xlim(xlim[0], xlim[1])
-                    ax[i][j].grid(b=True, which="major", color="k", linestyle="-")
-                    ax[i][j].minorticks_on()
-                    ax[i][j].grid(b=True, which="minor", color="k", linestyle=":", alpha=0.4)
-                    ax[i][j].axhline(xmin=xlim[0], xmax=xlim[1], color="k", linestyle="-", linewidth=1.5)
-                    ax[i][j].axvline(ymin=0, ymax=1, color="k", linestyle="-", linewidth=1.5)
-                    ax[i][j].legend()
-
-    def post_3dviewer(self):
-        (self.display, self.start_display, self.add_menu, self.add_function_to_menu) = display_config(cs_size=0.3, DeviationAngle=1e-7, DeviationCoefficient=1e-7)
-        if self.wire == None:
-            self.gen_OCCtopo()
-
-        for s in self.BSplineLst:
-            self.display.DisplayShape(s)
-
-        # self.display.DisplayShape(self.wire)
-        self.display.View_Top()
-        self.display.FitAll()
-        self.start_display()
-
-    def run_mses(self, re, ma):
-        """
-        run mses to calculate the polars.
-        
-        Notes
-        ----------
-        A possiblity in the future.
-        """
-        pass
-
-    def run_xfoil(self, re, ma):
-        """
-        run xfoil to calculate the polars.
-        
-        Notes
-        ----------
-        A possiblity in the future.
-        """
-        pass
 
 
 if __name__ == "__main__":
