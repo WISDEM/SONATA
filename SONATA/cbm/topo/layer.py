@@ -174,7 +174,6 @@ class Layer(object):
         OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0, cutoff_style = 2)
         OffsetBSplineLst = cutoff_layer(self.Boundary_BSplineLst, OffsetBSplineLst, self.S1, self.S2, self.cutoff_style)
         self.BSplineLst = OffsetBSplineLst
-        self.display_bsplinelst(self.BSplineLst)
 
     def determine_a_nodes(self, SegmentLst, global_minLen, display=None):
         """ """

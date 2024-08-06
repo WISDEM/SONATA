@@ -132,10 +132,6 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
             noffafpoly = afpoly.buffer(-dist)  # Inward offset
             data = np.array(noffafpoly.exterior.xy).T
         except AttributeError as e:
-            # intersects = True
-            # while intersects:
-            #     [intersects, arrPts] = shape_intersects_itself(arrPts)
-            # plt.plot(arrPts[:,0], arrPts[:,1],'o',color = 'blue')
             afpoly = shp.Polygon(arrPts)
             noffaf_multipoly = afpoly.buffer(-dist)  # Inward offset
             noffafpoly = get_largest_polygon(noffaf_multipoly) # If there are overlaps find polygon with largest area
@@ -214,10 +210,7 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
         else:
             Refinement = False
     # Combine close points around corners
-    plt.plot(arrPts[:,0],arrPts[:,1], 'o', color = 'green')
-    plt.plot(data[:,0],data[:,1], 'o', color = 'red')
     data = combine_close_points(data, dist**2*100, dist*4)
-    plt.plot(data[:,0],data[:,1], 'o', color = 'blue')
     return data
 
 

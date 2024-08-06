@@ -148,8 +148,6 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                     plt.plot(projected_point.X(),projected_point.Y(), color = 'purple', marker = 'x', markersize = 12)
                     node.corner = False
                     break
-        for point in pPnts:
-            plt.plot(point.X(),point.Y(), color = 'blue', marker = 'o', markersize = 10)
 
 
         # ==================making sure the pPnts are unique:
@@ -554,9 +552,5 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
 
         display.View_Top()
         display.FitAll()
-    # for node in a_nodes:
-    #          plt.plot(node.coordinates[0],node.coordinates[1], color = 'blue', marker = 'o', markersize = 10)
-    # for node in b_nodes:
-    #         plt.plot(node.coordinates[0],node.coordinates[1], color = 'green', marker = 'o', markersize = 10)
 
     return a_nodes, b_nodes, cellLst
