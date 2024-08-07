@@ -40,6 +40,9 @@ flag_wf                 = True      # plot wire-frame
 flag_lft                = True      # plot lofted shape of blade surface (flag_wf=True obligatory); Note: create loft with grid refinement without too many radial_stations; can also export step file of lofted shape
 flag_topo               = True      # plot mesh topology
 
+# Shape of corners
+choose_cutoff = 2    # 0 step, 2 round
+
 # create flag dictionary
 flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref_axes_wt,
               "attribute_str": attribute_str,

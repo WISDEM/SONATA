@@ -37,6 +37,9 @@ flag_DeamDyn_def_transform = True               # transform from SONATA to BeamD
 flag_write_BeamDyn = True                       # write BeamDyn input files for follow-up OpenFAST analysis (requires flag_DeamDyn_def_transform = True)
 flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exported to BeamDyn files
 
+# Shape of corners
+choose_cutoff = 2    # 0 step, 2 round
+
 
 # create flag dictionary
 flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref_axes_wt,
@@ -60,7 +63,7 @@ radial_stations = [0.000000000000000e+00, 6.896551724137931e-02, 1.0344827586206
 # flags         - communicates flag dictionary (defined above)
 # stations      - input of radial stations for cross sectional analysis
 # stations_sine - input of radial stations for refinement (only and automatically applied when lofing flag flag_lft = True)
-job = Blade(name=job_name, filename=filename_str, flags=flags_dict, stations=radial_stations)  # initialize job with respective yaml input file
+job = Blade(name=job_name, filename=filename_str, flags=flags_dict, cutoff_style = choose_cutoff, stations=radial_stations)  # initialize job with respective yaml input file
 
 # ===== Build & mesh segments ===== #
 job.blade_gen_section(topo_flag=True, mesh_flag = True)

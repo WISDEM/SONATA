@@ -155,7 +155,8 @@ class Blade(Component):
         "add_menu",
         "add_function_to_menu",
         "yml",
-        "loft"
+        "loft",
+        "cutoff_style"
     )
 
     def __init__(self, *args, **kwargs):
@@ -453,7 +454,7 @@ class Blade(Component):
             tmp_blra = self.f_beam_ref_axis.interpolate(x)[0][0]
             BoundaryBSplineLst = self._interpolate_cbm_boundary(x)
             cs_name = self.name + '_section_R'+ ("%.3f" % x).replace('.','')
-            tmp.append([x, CBM(cfg, materials=self.materials, name=cs_name, Ax2=tmp_Ax2, BSplineLst=BoundaryBSplineLst)])
+            tmp.append([x, CBM(cfg, materials=self.materials, name=cs_name, Ax2=tmp_Ax2, BSplineLst=BoundaryBSplineLst, cutoff_style = kwargs.get("cutoff_style"))])
         self.sections = np.asarray(tmp)
 
         return None

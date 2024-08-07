@@ -38,6 +38,9 @@ flag_DeamDyn_def_transform = True               # transform from SONATA to BeamD
 flag_write_BeamDyn = True                       # write BeamDyn input files for follow-up OpenFAST analysis (requires flag_DeamDyn_def_transform = True)
 flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exported to BeamDyn files
 
+# Shape of corners
+choose_cutoff = 2    # 0 step, 2 round
+
 
 
 # create flag dictionary

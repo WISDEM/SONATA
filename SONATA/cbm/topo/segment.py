@@ -1,5 +1,6 @@
 # Third party modules
 import numpy as np
+import matplotlib.pyplot as plt
 # First party modules
 from SONATA.cbm.mesh.mesh_core import gen_core_cells
 from SONATA.cbm.mesh.mesh_utils import (grab_nodes_of_cells_on_BSplineLst,
@@ -182,7 +183,21 @@ class Segment(object):
 
         (BSplineLst, start, end) = self.get_BsplineLst_plus(lid, SegmentLst, WebLst)
         return get_BSplineLst_Pnt2d(BSplineLst, S, start, end)
-    def build_layers(self, WebLst=None, Segment0=None, display=None, l0=None, **kwargs):
+    
+    def display_bsplinelst(self, bsplinelst, color = 'red'):
+        for bspline in bsplinelst:
+            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
+            # Extract points for plotting
+            num_points = 100  # Number of points to plot
+            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
+            x_values = [bspline.Value(u).X() for u in u_values]
+            y_values = [bspline.Value(u).Y() for u in u_values]
+            plt.plot(x_values, y_values, color = color)
+
+    # def check_intersection(self, Boundary_BSplineLst):
+    #     self.display_bsplinelst(Boundary_BSplineLst)
+
+    def build_layers(self, WebLst=None, Segment0=None, display=None, l0=None, cutoff_style = 2, **kwargs):
         """The build_layers member function of the class Segment generates all Layer objects and it's associated wires
         and return the relevant_boundary_BSplineLst"""
         # ivLst is a list of the each layer start, end, and id
@@ -211,7 +226,7 @@ class Segment(object):
                     self.Layup[i - 1][2],
                     self.Layup[i - 1][3],
                     self.Layup[i - 1][4],
-                    cutoff_style=2,
+                    cutoff_style = cutoff_style,
                     join_style=1,
                     name="test",
                 )
