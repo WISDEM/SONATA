@@ -183,27 +183,12 @@ class Segment(object):
 
         (BSplineLst, start, end) = self.get_BsplineLst_plus(lid, SegmentLst, WebLst)
         return get_BSplineLst_Pnt2d(BSplineLst, S, start, end)
-    
-    def display_bsplinelst(self, bsplinelst, color = 'red'):
-        for bspline in bsplinelst:
-            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
-            # Extract points for plotting
-            num_points = 100  # Number of points to plot
-            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
-            x_values = [bspline.Value(u).X() for u in u_values]
-            y_values = [bspline.Value(u).Y() for u in u_values]
-            plt.plot(x_values, y_values, color = color)
-
-    # def check_intersection(self, Boundary_BSplineLst):
-    #     self.display_bsplinelst(Boundary_BSplineLst)
-
     def build_layers(self, WebLst=None, Segment0=None, display=None, l0=None, cutoff_style = 2, **kwargs):
         """The build_layers member function of the class Segment generates all Layer objects and it's associated wires
         and return the relevant_boundary_BSplineLst"""
         # ivLst is a list of the each layer start, end, and id
         # cum_ivLst is the cumulative list of ivLsts
         cum_ivLst = self.boundary_ivLst
-
         if self.Layup.size != 0:
             for i in range(1, len(self.Layup) + 1):
                 print("STATUS:\t Building Segment %d, Layer: %d" % (self.ID, i))

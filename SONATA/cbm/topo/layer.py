@@ -109,68 +109,9 @@ class Layer(object):
     def build_wire(self):  # Builds TopoDS_Wire from connecting BSplineSegments and returns it
         self.wire = build_wire_from_BSplineLst(self.BSplineLst)
 
-    def display_bsplinelst(self, bsplinelst, color = 'red'):
-        for bspline in bsplinelst:
-            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
-            # Extract points for plotting
-            num_points = 100  # Number of points to plot
-            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
-            x_values = [bspline.Value(u).X() for u in u_values]
-            y_values = [bspline.Value(u).Y() for u in u_values]
-        
-            plt.plot(x_values, y_values, color = color)
-
-    # Function to check if two line segments (p1, q1) and (p2, q2) intersect
-    def do_intersect(self, p1, q1, p2, q2):
-        def orientation(p, q, r):
-            val = (float(q[1] - p[1]) * (r[0] - q[0])) - (float(q[0] - p[0]) * (r[1] - q[1]))
-            if val > 0:
-                return 1  # Clockwise
-            elif val < 0:
-                return 2  # Counterclockwise
-            else:
-                return 0  # Collinear
-
-        def on_segment(p, q, r):
-            if min(p[0], q[0]) <= r[0] <= max(p[0], q[0]) and min(p[1], q[1]) <= r[1] <= max(p[1], q[1]):
-                return True
-            return False
-
-        o1 = orientation(p1, q1, p2)
-        o2 = orientation(p1, q1, q2)
-        o3 = orientation(p2, q2, p1)
-        o4 = orientation(p2, q2, q1)
-
-        # General case
-        if o1 != o2 and o3 != o4:
-            return True
-
-        # Special cases
-        if o1 == 0 and on_segment(p1, q1, p2):
-            return True
-        if o2 == 0 and on_segment(p1, q1, q2):
-            return True
-        if o3 == 0 and on_segment(p2, q2, p1):
-            return True
-        if o4 == 0 and on_segment(p2, q2, q1):
-            return True
-
-        return False
-
-    # Function to check if a shape intersects itself
-    def shape_intersects_itself(self, coords):
-        num_points = len(coords)
-        for i in range(num_points - 1):  # Loop to (num_points - 1) to avoid out-of-bounds access
-            for j in range(i + 2, num_points - (1 if i == 0 else 0)):  # Adjusting the range to avoid out-of-bounds
-                if self.do_intersect(coords[i], coords[i + 1], coords[j], coords[(j + 1) % num_points]):
-                    return True
-        return False 
-
     def build_layer(self, l0=1):
         npArray = discretize_BSplineLst(self.Boundary_BSplineLst, 1.2e-6 * l0)
         self.offlinepts = shp_parallel_offset(npArray, self.thickness, self.join_style)
-        if self.shape_intersects_itself(self.offlinepts[1:-2]):
-            print("WARNING: THERE IS AN INTERSECTION IN THE STRUCTURE")
         OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0, cutoff_style = 2)
         OffsetBSplineLst = cutoff_layer(self.Boundary_BSplineLst, OffsetBSplineLst, self.S1, self.S2, self.cutoff_style)
         self.BSplineLst = OffsetBSplineLst

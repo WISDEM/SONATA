@@ -35,7 +35,12 @@ from SONATA.cbm.topo.web import Web
 from SONATA.cbm.topo.weight import Weight
 from SONATA.vabs.classStrain import Strain
 from SONATA.vabs.classStress import Stress
+from SONATA.cbm.topo.projection import (
+    chop_interval_from_layup, sort_layup_projection,)
 # from SONATA.vabs.classVABSConfig import VABSConfig
+
+from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
+from OCC.Core.gp import gp_Pnt2d
 
 try:
     import dolfin as do
@@ -200,6 +205,53 @@ class CBM(object):
         sorted(self.SegmentLst, key=getID)
         self.refL = get_BSplineLst_length(self.SegmentLst[0].BSplineLst)
         return None
+    
+    def find_bspline_ends(self, bspline):
+        start_point = gp_Pnt2d()
+        end_point = gp_Pnt2d()
+        bspline.D0(bspline.FirstParameter(), start_point)
+        bspline.D0(bspline.LastParameter(), end_point)
+        return start_point, end_point
+
+    def check_bspline_intersections(self, Boundary_BSplineLst):
+        start_tol = 1e-5
+        intersection_points = []
+        intersected = False
+        for i in range(len(Boundary_BSplineLst)):
+            for j in range(len(Boundary_BSplineLst)):
+                if i != j:
+                    start1, end1 = self.find_bspline_ends(Boundary_BSplineLst[i])
+                    start2, end2 = self.find_bspline_ends(Boundary_BSplineLst[j])
+                    intersector = Geom2dAPI_InterCurveCurve(Boundary_BSplineLst[i],Boundary_BSplineLst[j])
+                    if intersector.NbPoints() > 0:
+                        for i in range(1, intersector.NbPoints()+1):
+                            if not intersector.Point(i).IsEqual(start1, start_tol) and not intersector.Point(i).IsEqual(end1, start_tol) and not intersector.Point(i).IsEqual(start2, start_tol) and not intersector.Point(i).IsEqual(end2, start_tol):
+                                intersected = True
+                                intersection_points.append(intersector.Point(i))
+        return [intersected, intersection_points]
+    
+    def display_bsplinelst(self, bsplinelst, color = 'blue'):
+        for bspline in bsplinelst:
+            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
+            # Extract points for plotting
+            num_points = 100  # Number of points to plot
+            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
+            x_values = [bspline.Value(u).X() for u in u_values]
+            y_values = [bspline.Value(u).Y() for u in u_values]
+            plt.plot(x_values, y_values, color = color)
+
+    def check_for_bspline_intersections(self, segment):
+        ivLst = chop_interval_from_layup(segment.boundary_ivLst, 0, 1)
+        ivLst = sort_layup_projection([ivLst])[0]
+        # Creating reference layer from the chopped ivLst
+        Boundary_BSplineLst = segment.ivLst_to_BSplineLst(ivLst)
+        [intersected, intersection_pnt] = self.check_bspline_intersections(Boundary_BSplineLst)
+        if intersected:
+            print("WARNING: There is an intersection in the structure.")
+            self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
+            self.display_bsplinelst(Boundary_BSplineLst, 'blue')
+            for points in intersection_pnt:
+                plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
 
     def cbm_gen_topo(self, **kwargs):
         """
@@ -216,6 +268,7 @@ class CBM(object):
         self.SegmentLst[0].build_wire()
         self.SegmentLst[0].build_layers(l0=self.refL, cutoff_style = self.cutoff_style, **kwargs)
         self.SegmentLst[0].determine_final_boundary()
+        self.check_for_bspline_intersections(self.SegmentLst[0])
 
         # Build Webs:
         self.WebLst = []
@@ -233,6 +286,7 @@ class CBM(object):
                 seg.build_segment_boundary_from_WebLst(self.WebLst, self.SegmentLst[0])
                 seg.build_layers(self.WebLst, self.SegmentLst[0], l0=self.refL, cutoff_style = self.cutoff_style)
                 seg.determine_final_boundary(self.WebLst, self.SegmentLst[0])
+                self.check_for_bspline_intersections(seg)
                 seg.build_wire()
 
         self.BW = None
