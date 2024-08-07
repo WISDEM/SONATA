@@ -224,10 +224,10 @@ class CBM(object):
                     start2, end2 = self.find_bspline_ends(Boundary_BSplineLst[j])
                     intersector = Geom2dAPI_InterCurveCurve(Boundary_BSplineLst[i],Boundary_BSplineLst[j])
                     if intersector.NbPoints() > 0:
-                        for i in range(1, intersector.NbPoints()+1):
-                            if not intersector.Point(i).IsEqual(start1, start_tol) and not intersector.Point(i).IsEqual(end1, start_tol) and not intersector.Point(i).IsEqual(start2, start_tol) and not intersector.Point(i).IsEqual(end2, start_tol):
+                        for k in range(1, intersector.NbPoints()+1):
+                            if not intersector.Point(k).IsEqual(start1, start_tol) and not intersector.Point(k).IsEqual(end1, start_tol) and not intersector.Point(k).IsEqual(start2, start_tol) and not intersector.Point(k).IsEqual(end2, start_tol):
                                 intersected = True
-                                intersection_points.append(intersector.Point(i))
+                                intersection_points.append(intersector.Point(k))
         return [intersected, intersection_points]
     
     def display_bsplinelst(self, bsplinelst, color = 'blue'):
