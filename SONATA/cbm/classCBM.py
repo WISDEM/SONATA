@@ -248,10 +248,12 @@ class CBM(object):
         [intersected, intersection_pnt] = self.check_bspline_intersections(Boundary_BSplineLst)
         if intersected:
             print("WARNING: There is an intersection in the structure.")
+            plt.figure()
             self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
             self.display_bsplinelst(Boundary_BSplineLst, 'blue')
             for points in intersection_pnt:
                 plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
+            plt.show()
 
     def cbm_gen_topo(self, **kwargs):
         """
