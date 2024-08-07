@@ -145,7 +145,6 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                     pPnts.append(projected_point)
                     pPara.append(node.parameters[2])
                     pIdx.append(idx)
-                    plt.plot(projected_point.X(),projected_point.Y(), color = 'purple', marker = 'x', markersize = 12)
                     node.corner = False
                     break
 
