@@ -214,6 +214,7 @@ class CBM(object):
         return start_point, end_point
 
     def check_bspline_intersections(self, Boundary_BSplineLst):
+        # Checking for bspline intersections in a bspline list not including start and end points
         start_tol = 1e-5
         intersection_points = []
         intersected = False
@@ -241,6 +242,7 @@ class CBM(object):
             plt.plot(x_values, y_values, color = color)
 
     def check_for_bspline_intersections(self, segment):
+        # Getting all boundary Bsplines
         ivLst = chop_interval_from_layup(segment.boundary_ivLst, 0, 1)
         ivLst = sort_layup_projection([ivLst])[0]
         # Creating reference layer from the chopped ivLst
@@ -253,7 +255,6 @@ class CBM(object):
             self.display_bsplinelst(Boundary_BSplineLst, 'blue')
             for points in intersection_pnt:
                 plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
-            plt.show()
 
     def cbm_gen_topo(self, **kwargs):
         """

@@ -5,11 +5,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from OCC.Core.Geom2dAPI import (Geom2dAPI_PointsToBSpline,
                                 Geom2dAPI_ProjectPointOnCurve,)
-from OCC.Core.gp import gp_Pnt2d, gp_Vec2d, gp_Dir2d, gp_Lin2d
+from OCC.Core.gp import gp_Pnt2d, gp_Vec2d, gp_Dir2d
 from OCC.Core.Geom2d import Geom2d_Line
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
-from OCC.Core.Geom2dAPI import Geom2dAPI_Interpolate
-from OCC.Core.TColgp import TColgp_HArray1OfPnt2d
 
 # First party modules
 from SONATA.cbm.mesh.cell import Cell
@@ -35,7 +33,20 @@ def angle_between(v1, v2):
     return np.arccos(cos_theta)
 
 
-def projection_method(points, bspline, tolerance):
+def three_pnt_projection_method(points, bspline, tolerance):
+    """
+    Project node onto target Bspline along the bisecting vector based on the two adjacent nodes.
+    ----------
+    Input:
+    points: array of three points in order. The middle point is the point being projected and the
+    first and last points are the two points adjacent to the point being projected.
+    bspline: The targeted bspline.
+    tolerance: A distance tolerance. If the point is projected a distance farther than the tolerance,
+    it is not projected.
+
+    Output:
+    The point at which the bisecting vector intersects the target bspline.
+    """
     prev = points[0]
     curr = points[1]
     start_point_2d = gp_Pnt2d(curr[0],curr[1])
@@ -44,16 +55,17 @@ def projection_method(points, bspline, tolerance):
     vec2 = next - curr
     angle = angle_between(vec1,vec2)
     
+    # Find the two normal vectors pointing from the middle point to the adjacent points
     vec1_perp = np.array([-vec1[1], vec1[0]]) / np.linalg.norm([-vec1[1], vec1[0]])
     vec2_perp = np.array([-vec2[1], vec2[0]]) / np.linalg.norm([-vec2[1], vec2[0]])
     
+    # Finding the vector that bisects the two normal vectors. The project point will be in the direction of the bisecting vector.
     bisecting_vector = - np.sqrt((1 + np.dot(vec1_perp, vec2_perp)) / 2) * (vec1_perp + vec2_perp) / np.linalg.norm(vec1_perp + vec2_perp)
     direction_2d = gp_Dir2d(bisecting_vector[0],bisecting_vector[1])
     line_2d = Geom2d_Line(start_point_2d, direction_2d)
+
+    # Finding where the bisecting vector intersects the target Bspline
     intersector = Geom2dAPI_InterCurveCurve(line_2d, bspline)
-    # line_2d_neg = Geom2d_Line(start_point_2d, direction_2d)
-    # if not intersector:
-    #     intersector = Geom2dAPI_InterCurveCurve(line_2d_neg, bspline)
     if intersector.NbPoints() > 0:
         intersection_point = intersector.Point(1)
         distance = np.sqrt((curr[0]-intersection_point.X())**2+(curr[1]-intersection_point.Y())**2)
@@ -119,6 +131,9 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
         pPara = []
         pIdx = []
         projected = False
+
+        # Projects current node onto the target Bspline where the vector between the current node
+        # and the projected node is perpendicular.
         for idx, item in enumerate(b_BSplineLst):
             first = item.FirstParameter()
             last = item.LastParameter()
@@ -135,12 +150,16 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                     projected = True
                 else:
                     None
+        # If no node is found that creates a vector perpendicular to the target Bspline, a different
+        # projection method is tried using the current node and the neighboring nodes to create a
+        # bisecting vector. The point at which the bisecting vector intersects the target Bspline
+        # is where the projected point is placed. This helps for projecting nodes on corners.
         if not projected and i-1 != 0 and not i-1 > len(prj_nodes)-2:
             for idx, item in enumerate(b_BSplineLst):
                 prev_point = np.array([prj_nodes[i-2].coordinates[0], prj_nodes[i-2].coordinates[1]])
                 curr_point = np.array([prj_nodes[i-1].coordinates[0], prj_nodes[i-1].coordinates[1]])
                 next_point = np.array([prj_nodes[i].coordinates[0], prj_nodes[i].coordinates[1]])
-                projected_point = projection_method([prev_point,curr_point,next_point], item, distance*10)
+                projected_point = three_pnt_projection_method([prev_point,curr_point,next_point], item, distance*10)
                 if projected_point:
                     pPnts.append(projected_point)
                     pPara.append(node.parameters[2])
