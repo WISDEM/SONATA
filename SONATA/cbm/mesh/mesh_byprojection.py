@@ -33,7 +33,7 @@ def angle_between(v1, v2):
     return np.arccos(cos_theta)
 
 
-def three_pnt_projection_method(points, bspline, tolerance):
+def three_pnt_projection_method(points, bspline, min_dist):
     """
     Project node onto target Bspline along the bisecting vector based on the two adjacent nodes.
     ----------
@@ -69,9 +69,9 @@ def three_pnt_projection_method(points, bspline, tolerance):
     if intersector.NbPoints() > 0:
         intersection_point = intersector.Point(1)
         distance = np.sqrt((curr[0]-intersection_point.X())**2+(curr[1]-intersection_point.Y())**2)
-        if distance < tolerance*(2+np.cos(angle)):
-            return intersection_point
-    return None
+        if distance < min_dist:
+            return [intersection_point, distance, True]
+    return [None, None, False]
 
 def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, layer_thickness, tol=1e-2, crit_angle=95, LayerID=0, refL=1.0, **kw):
     """
@@ -155,17 +155,22 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
         # bisecting vector. The point at which the bisecting vector intersects the target Bspline
         # is where the projected point is placed. This helps for projecting nodes on corners.
         if not projected and i-1 != 0 and not i-1 > len(prj_nodes)-2:
+            min_distance = np.inf
             for idx, item in enumerate(b_BSplineLst):
                 prev_point = np.array([prj_nodes[i-2].coordinates[0], prj_nodes[i-2].coordinates[1]])
                 curr_point = np.array([prj_nodes[i-1].coordinates[0], prj_nodes[i-1].coordinates[1]])
                 next_point = np.array([prj_nodes[i].coordinates[0], prj_nodes[i].coordinates[1]])
-                projected_point = three_pnt_projection_method([prev_point,curr_point,next_point], item, distance*10)
-                if projected_point:
-                    pPnts.append(projected_point)
-                    pPara.append(node.parameters[2])
-                    pIdx.append(idx)
-                    node.corner = False
-                    break
+                [tmp_projected_point, tmp_min_distance, projected] = three_pnt_projection_method([prev_point,curr_point,next_point], item, min_distance)
+                if projected:
+                    projected_point = tmp_projected_point
+                    min_distance = tmp_min_distance
+                    tmp_idx = idx
+
+            if projected_point:
+                pPnts.append(projected_point)
+                pPara.append(node.parameters[2])
+                pIdx.append(tmp_idx)
+                node.corner = False
 
 
         # ==================making sure the pPnts are unique:
