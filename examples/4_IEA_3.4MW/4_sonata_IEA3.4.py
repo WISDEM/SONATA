@@ -37,6 +37,8 @@ flag_DeamDyn_def_transform = True               # transform from SONATA to BeamD
 flag_write_BeamDyn = True                       # write BeamDyn input files for follow-up OpenFAST analysis (requires flag_DeamDyn_def_transform = True)
 flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exported to BeamDyn files
 
+# Shape of corners
+choose_cutoff = 2    # 0 step, 2 round
 
 # create flag dictionary
 flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref_axes_wt,
@@ -48,12 +50,12 @@ flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref
 
 # ===== User defined radial statiosns ===== #
 # Define the radial stations for cross sectional analysis (only used for flag_wt_ontology = True -> otherwise, sections from yaml file are used!)
-# radial_stations = [0.000000000000000e+00, 6.896551724137931e-02, 1.034482758620690e-01, 1.379310344827586e-01, 1.724137931034483e-01, 2.068965517241379e-01, 
-#                    2.413793103448276e-01, 2.758620689655172e-01, 3.103448275862069e-01, 3.448275862068966e-01, 3.793103448275862e-01, 4.137931034482759e-01, 4.482758620689655e-01, 
-#                    4.827586206896551e-01, 5.172413793103449e-01, 5.517241379310345e-01, 5.862068965517241e-01, 6.206896551724138e-01, 6.551724137931034e-01, 6.896551724137931e-01, 
-#                    7.241379310344828e-01, 7.586206896551724e-01, 7.931034482758621e-01, 8.275862068965517e-01, 8.620689655172413e-01, 8.965517241379310e-01, 9.310344827586207e-01, 
-#                    9.655172413793103e-01, 1.000000000000000e+00]
-radial_stations = [.4]
+radial_stations = [0.000000000000000e+00, 6.896551724137931e-02, 1.034482758620690e-01, 1.379310344827586e-01, 1.724137931034483e-01, 2.068965517241379e-01, 
+                   2.413793103448276e-01, 2.758620689655172e-01, 3.103448275862069e-01, 3.448275862068966e-01, 3.793103448275862e-01, 4.137931034482759e-01, 4.482758620689655e-01, 
+                   4.827586206896551e-01, 5.172413793103449e-01, 5.517241379310345e-01, 5.862068965517241e-01, 6.206896551724138e-01, 6.551724137931034e-01, 6.896551724137931e-01, 
+                   7.241379310344828e-01, 7.586206896551724e-01, 7.931034482758621e-01, 8.275862068965517e-01, 8.620689655172413e-01, 8.965517241379310e-01, 9.310344827586207e-01, 
+                   9.655172413793103e-01, 1.000000000000000e+00]
+# radial_stations = [.4]
 
 # ===== Execute SONATA Blade Component Object ===== #
 # name          - job name of current task

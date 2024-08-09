@@ -197,6 +197,10 @@ class Airfoil(object):
     def interpolate_shapes(self, af1, af2, t):
         """Interpolate between shape1 and shape2 based on parameter t (0 <= t <= 1)."""
         # Ensure both shapes have the same number of points
+        if np.mean(af1[int(len(af1)*1/6):int(len(af1)*1/3), 1]) < 0:
+            af1 = np.flip(af1,0)
+        if np.mean(af2[int(len(af2)*1/6):int(len(af2)*1/3), 1]) < 0:
+            af2 = np.flip(af2,0)
         num_points = max(len(af1), len(af2))
         af1 = self.normalize_points(af1, num_points)
         af2 = self.normalize_points(af2, num_points)

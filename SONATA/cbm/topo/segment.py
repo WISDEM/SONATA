@@ -1,5 +1,6 @@
 # Third party modules
 import numpy as np
+import matplotlib.pyplot as plt
 # First party modules
 from SONATA.cbm.mesh.mesh_core import gen_core_cells
 from SONATA.cbm.mesh.mesh_utils import (grab_nodes_of_cells_on_BSplineLst,
@@ -182,13 +183,12 @@ class Segment(object):
 
         (BSplineLst, start, end) = self.get_BsplineLst_plus(lid, SegmentLst, WebLst)
         return get_BSplineLst_Pnt2d(BSplineLst, S, start, end)
-    def build_layers(self, WebLst=None, Segment0=None, display=None, l0=None, **kwargs):
+    def build_layers(self, WebLst=None, Segment0=None, display=None, l0=None, cutoff_style = 2, **kwargs):
         """The build_layers member function of the class Segment generates all Layer objects and it's associated wires
         and return the relevant_boundary_BSplineLst"""
         # ivLst is a list of the each layer start, end, and id
         # cum_ivLst is the cumulative list of ivLsts
         cum_ivLst = self.boundary_ivLst
-
         if self.Layup.size != 0:
             for i in range(1, len(self.Layup) + 1):
                 print("STATUS:\t Building Segment %d, Layer: %d" % (self.ID, i))
@@ -211,7 +211,7 @@ class Segment(object):
                     self.Layup[i - 1][2],
                     self.Layup[i - 1][3],
                     self.Layup[i - 1][4],
-                    cutoff_style=2,
+                    cutoff_style = cutoff_style,
                     join_style=1,
                     name="test",
                 )
