@@ -4,6 +4,7 @@ channels:
   - tpaviot
 
 dependencies:
+  - python>=3.9,<3.10
   - pythonocc-core==7.4.1 
   - fenics
   - pint 
