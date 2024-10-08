@@ -65,7 +65,15 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     cbmconfigs : np.array
         returns a numpy array with grid location and CBMconfig instances
         np.array([[grid, CBMconfig]])
-    
+
+    Notes
+    -----
+
+    `midpoint_nd_arc` and `width` are supported for non-web layers;
+    `start_nd_arc` and `end_nd_arc` take precedence.
+    `midpoint_nd_arc` can be defined with values on a grid or with
+    `fixed : LE` or `fixed : TE` for the leading and trailing edges
+    respectively.
     """
 
     # Segments and webs
@@ -142,6 +150,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     adhesive_extent = np.zeros(len(x))
     # id_count = np.zeros(len(x), dtype=int)
 
+    # Loop over non-dimensional span positions of interest
     for i in range(len(x)):
 
         id_profile = np.argmin(np.abs(blade.blade_ref_axis[:,0]-x[i]))
@@ -152,7 +161,8 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
         if np.mean(profile[0:id_le, 1]) < 0:
             profile = np.flip(profile,0)
 
-        profile_curve   = arc_length(profile[:,0], profile[:,1]) / arc_length(profile[:,0], profile[:,1])[-1]
+        total_arc = arc_length(profile[:,0], profile[:,1])[-1]
+        profile_curve   = arc_length(profile[:,0], profile[:,1]) / total_arc
 
         id_layer     = 0
         web_filler_index = False  # introduce web filler index to separate leading and trailing web layups
@@ -164,6 +174,9 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 set_interp_thick = PchipInterpolator(sec['thickness']['grid'], sec['thickness']['values'])
                 thick_i = float(set_interp_thick(x[i]))  # added float
 
+                default_start = False
+                default_end = False
+
                 if 'start_nd_arc' in sec.keys():
                     set_interp = PchipInterpolator(sec['start_nd_arc']['grid'], sec['start_nd_arc']['values'])
                     start_i     = float(set_interp(x[i]))
@@ -173,11 +186,61 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                                 start_i += 5.e-3
                 else:
                     start_i = 0
+                    default_start = True
                 if 'end_nd_arc' in sec.keys():
                     set_interp = PchipInterpolator(sec['end_nd_arc']['grid'], sec['end_nd_arc']['values'])
                     end_i     = float(set_interp(x[i]))
                 else:
                     end_i = 1
+                    default_end = True
+
+                # If using default for the start/end, then the default value
+                # should be overwritten by the midpoint_nd_arc/width option set
+                if 'midpoint_nd_arc' in sec.keys() and 'width' in sec.keys():
+
+                    width_interp = PchipInterpolator(sec['width']['grid'],
+                                                 sec['width']['values'])
+
+                    width_nd = float(width_interp(x[i])) / total_arc
+
+                    print('Need to handle the LE/TE keywords for midpint_nd_arc here.')
+
+                    if 'fixed' in sec['midpoint_nd_arc'].keys():
+
+                        if sec['midpoint_nd_arc']['fixed'].upper() == 'LE':
+
+                            # profile may have had order flipped after
+                            # previous id_le determination.
+                            id_le = np.argmin(profile[:,0])
+
+                            mid_nd = profile_curve[id_le]
+
+                        elif sec['midpoint_nd_arc']['fixed'].upper() == 'TE':
+
+                            mid_nd = 1.0
+
+                        else:
+                            print("WARNING : Unrecognized keyword for midpoint_nd_arc,fixed!")
+                            mid_nd = np.nan
+
+                    else:
+                        mid_interp = PchipInterpolator(sec['midpoint_nd_arc']['grid'],
+                                                     sec['midpoint_nd_arc']['values'])
+
+                        mid_nd = float(mid_interp(x[i]))
+
+                    if default_start:
+
+                        start_i = mid_nd - 0.5*width_nd
+
+                        # Wrap value if less than 0.0
+                        start_i += (start_i < 0)
+
+                    if default_end:
+                        end_i = mid_nd + 0.5*width_nd
+
+                        # Reduce the value if greater than 1.0
+                        end_i -= (end_i > 1.0)
 
                 if thick_i > 1.e-6 and abs(start_i - end_i) > 1.e-3:
                     if 'web' not in sec.keys():                        
@@ -186,17 +249,12 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                         tmp2[i]['segments'][0]['layup'][id_layer]['thickness']     = thick_i
                         tmp2[i]['segments'][0]['layup'][id_layer]['name']          = sec['material'] + '_' + str(x[i])
                         tmp2[i]['segments'][0]['layup'][id_layer]['material_name'] = sec['material']
-                        if 'start_nd_arc' in sec.keys():
 
-                            set_interp = PchipInterpolator(sec['start_nd_arc']['grid'], sec['start_nd_arc']['values'])
-                            tmp2[i]['segments'][0]['layup'][id_layer]['start']     = float(set_interp(x[i]))  # added float
+                        # Should not need to recalculate start and end since
+                        # they were just calculated.
+                        tmp2[i]['segments'][0]['layup'][id_layer]['start']     = start_i
+                        tmp2[i]['segments'][0]['layup'][id_layer]['end']       = end_i
 
-                            set_interp = PchipInterpolator(sec['end_nd_arc']['grid'], sec['end_nd_arc']['values'])
-                            tmp2[i]['segments'][0]['layup'][id_layer]['end']       = float(set_interp(x[i]))  # added float
-
-                        else:
-                            tmp2[i]['segments'][0]['layup'][id_layer]['start']     = 0.
-                            tmp2[i]['segments'][0]['layup'][id_layer]['end']       = 1.
                         if 'fiber_orientation' in sec.keys():
                             set_interp = PchipInterpolator(sec['fiber_orientation']['grid'], sec['fiber_orientation']['values'])
                             tmp2[i]['segments'][0]['layup'][id_layer]['orientation'] = float(set_interp(x[i]) * 180 / np.pi)  # added float
