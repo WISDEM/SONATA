@@ -201,9 +201,9 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                     width_interp = PchipInterpolator(sec['width']['grid'],
                                                  sec['width']['values'])
 
-                    width_nd = float(width_interp(x[i])) / total_arc
+                    ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
 
-                    print('Need to handle the LE/TE keywords for midpint_nd_arc here.')
+                    width_nd = float(width_interp(x[i])) / total_arc / ch
 
                     if 'fixed' in sec['midpoint_nd_arc'].keys():
 
@@ -220,7 +220,8 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                             mid_nd = 1.0
 
                         else:
-                            print("WARNING : Unrecognized keyword for midpoint_nd_arc,fixed!")
+                            print("WARNING : Unrecognized keyword for "
+                                  + "['midpoint_nd_arc']['fixed']!")
                             mid_nd = np.nan
 
                     else:
