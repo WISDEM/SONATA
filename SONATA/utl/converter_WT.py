@@ -69,8 +69,17 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     Notes
     -----
 
-    `midpoint_nd_arc` and `width` are supported for non-web layers;
-    `start_nd_arc` and `end_nd_arc` take precedence.
+    Precedence of keys:
+        1. `start_nd_arc` and `end_nd_arc` will be used as
+            provided if provided.
+        2. If `width` is provided with one of `start_nd_arc` or `end_nd_arc`,
+            then the `width` will be used to set the other value.
+        3. If `width` is defined with neither `start_nd_arc` or `end_nd_arc`,
+            and `midpoint_nd_arc` is provided, then those two values will be
+            used.
+        4. Other cases are not implemented so will use the default values
+            for `start_nd_arc` (0) and `end_nd_arc` (1).
+
     `midpoint_nd_arc` can be defined with values on a grid or with
     `fixed : LE` or `fixed : TE` for the leading and trailing edges
     respectively.
@@ -194,14 +203,42 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                     end_i = 1
                     default_end = True
 
-                # If using default for the start/end, then the default value
-                # should be overwritten by the midpoint_nd_arc/width option set
-                if 'midpoint_nd_arc' in sec.keys() and 'width' in sec.keys():
+                ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
+
+                if 'width' in sec.keys():
 
                     width_interp = PchipInterpolator(sec['width']['grid'],
                                                  sec['width']['values'])
 
-                    ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
+                    width_nd = float(width_interp(x[i])) / total_arc / ch
+
+                    if default_start and not default_end:
+
+                        start_i = end_i - width_nd
+
+                        # Wrap value if less than 0.0
+                        start_i += (start_i < 0)
+
+                        default_start = False
+
+                    if default_end and not default_start:
+
+                        end_i = start_i + width_nd
+                        # Reduce the value if greater than 1.0
+                        end_i -= (end_i > 1.0)
+
+                        default_end = False
+
+
+                # If using default for the start and end, then the default
+                # value should be overwritten by the midpoint_nd_arc/width
+                # option set
+                if 'midpoint_nd_arc' in sec.keys() \
+                    and 'width' in sec.keys() \
+                    and default_start and default_end:
+
+                    width_interp = PchipInterpolator(sec['width']['grid'],
+                                                 sec['width']['values'])
 
                     width_nd = float(width_interp(x[i])) / total_arc / ch
 
@@ -230,18 +267,13 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
 
                         mid_nd = float(mid_interp(x[i]))
 
-                    if default_start:
+                    start_i = mid_nd - 0.5*width_nd
+                    # Wrap value if less than 0.0
+                    start_i += (start_i < 0)
 
-                        start_i = mid_nd - 0.5*width_nd
-
-                        # Wrap value if less than 0.0
-                        start_i += (start_i < 0)
-
-                    if default_end:
-                        end_i = mid_nd + 0.5*width_nd
-
-                        # Reduce the value if greater than 1.0
-                        end_i -= (end_i > 1.0)
+                    end_i = mid_nd + 0.5*width_nd
+                    # Reduce the value if greater than 1.0
+                    end_i -= (end_i > 1.0)
 
                 if thick_i > 1.e-6 and abs(start_i - end_i) > 1.e-3:
                     if 'web' not in sec.keys():                        
