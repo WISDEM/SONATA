@@ -420,11 +420,13 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 x_web_start     = set_interp(start)
                 x_web_end       = set_interp(end)
 
-                x_web_start_le  = x_web_start - thick_web[i, i_web] / blade.chord[i , 1]
-                x_web_start_te  = x_web_start + thick_web[i, i_web] / blade.chord[i , 1]
+                ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
 
-                x_web_end_le    = x_web_end - thick_web[i, i_web] / blade.chord[i , 1]
-                x_web_end_te    = x_web_end + thick_web[i, i_web] / blade.chord[i , 1]
+                x_web_start_le  = x_web_start - thick_web[i, i_web] / ch / 2.0
+                x_web_start_te  = x_web_start + thick_web[i, i_web] / ch / 2.0
+
+                x_web_end_le    = x_web_end - thick_web[i, i_web] / ch / 2.0
+                x_web_end_te    = x_web_end + thick_web[i, i_web] / ch / 2.0
 
                 # Correction to avoid errors in the interpolation at the edges
                 if min(np.diff(np.flip(profile[0:id_le,0]))) < 0:
