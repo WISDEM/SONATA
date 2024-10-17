@@ -60,6 +60,7 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         cmaplist = [cmap(i) for i in range(cmap.N)]
         cmap = LinearSegmentedColormap.from_list('Custom cmap', cmaplist, max(data))
         
+        cmap = cm.get_cmap('tab20',max(data))
     else:
         cmap = plt.cm.get_cmap()
 
@@ -74,7 +75,6 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         vmax = None
     from palettable.cartocolors.qualitative import Prism_9
     from matplotlib.colors import ListedColormap
-    cmap = cm.get_cmap('tab20',max(data))
 
     fig, ax = plt.subplots(1,1,figsize=(7.5, 6))
     patches = []
@@ -95,7 +95,7 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
     p.set_clim(vmin, vmax)
     _ = ax.add_collection(p)
 
-    cbar = fig.colorbar(p, ax=ax, drawedges=True)
+    cbar = fig.colorbar(p, ax=ax, drawedges=(data_name == 'MatID'))
     cbar.ax.set_ylabel(data_name)
 
     if data_name == "MatID":

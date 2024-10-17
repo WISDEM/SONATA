@@ -27,8 +27,9 @@ attribute_str           = 'MatID'  # default: 'MatID' (theta_3 - fiber orientati
 
 # 2D cross sectional plots (blade_plot_sections)
 flag_plotTheta11        = False      # plane orientation angle
-flag_recovery           = False
+flag_recovery           = False     # Set to True to Plot stresses/strains
 flag_plotDisplacement   = True     # Needs recovery flag to be activated - shows displacements from loadings in cross sectional plots
+
 # 3D plots (blade_post_3dtopo)
 flag_wf                 = True      # plot wire-frame
 flag_lft                = True      # plot lofted shape of blade surface (flag_wf=True obligatory); Note: create loft with grid refinement without too many radial_stations; can also export step file of lofted shape
@@ -65,6 +66,20 @@ job = Blade(name=job_name, filename=filename_str, flags=flags_dict, stations=rad
 
 # ===== Build & mesh segments ===== #
 job.blade_gen_section(topo_flag=True, mesh_flag = True)
+
+
+# ===== Recovery Analysis (inputs in SONATA coordinate system) ===== #
+if flags_dict['flag_recovery']:
+    # 15 MT turbine mean loads at 0.325 (test uses same loads for each radial station)
+    Forces =  np.array([727300, -8737, 508643])  # forces, N (F1: axial force; F2,F3: sectional transverse shear forces)
+    Moments =  np.array([-222054, -18047568, -226918])  # moments, Nm (M1: torsion, M2: flap; M3: lag)
+
+    from SONATA.utl.recovery_utl import anba_recovery_utl
+
+    loads = anba_recovery_utl(Forces, Moments)
+    job.blade_run_anbax(loads)
+
+# ===== BeamDyn Outputs ===== #
 
 # Define flags
 flag_3d = False
