@@ -55,7 +55,7 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         cmap_name, colors, N=6)
         
     elif data_name == 'MatID':
-        cmap = a=plt.cm.get_cmap()
+        cmap = plt.cm.get_cmap()
         # extract all colors from the .jet map
         cmaplist = [cmap(i) for i in range(cmap.N)]
         cmap = LinearSegmentedColormap.from_list('Custom cmap', cmaplist, max(data))
@@ -73,8 +73,6 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         vmax = kw["vmax"]
     else:
         vmax = None
-    from palettable.cartocolors.qualitative import Prism_9
-    from matplotlib.colors import ListedColormap
 
     fig, ax = plt.subplots(1,1,figsize=(7.5, 6))
     patches = []
