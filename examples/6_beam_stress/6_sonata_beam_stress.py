@@ -54,7 +54,7 @@ flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref
 
 # ===== User defined radial stations ===== #
 # Define the radial stations for cross sectional analysis (only used for flag_wt_ontology = True -> otherwise, sections from yaml file are used!)
-radial_stations =  [0., 1.]
+radial_stations =  [0., 0.25, 0.5, 0.75, 1.]
 # radial_stations = [.7]
 
 # ===== Execute SONATA Blade Component Object ===== #
@@ -80,13 +80,33 @@ flags_dict['flag_DeamDyn_def_transform'] = flag_DeamDyn_def_transform
 flags_dict['flag_write_BeamDyn'] = flag_write_BeamDyn
 flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert
 
-# forces, N (F1: axial force
-#            F2: x-direction shear force
-#            F3: y-direction shear force)
-# moments, Nm (M1: torsional moment, 
-#              M2: bending moment about x, (axis parallel to chord)
-#              M3: bending moment around y) 
-Loads_dict = {"Forces":[0.0,0.0,0.0],"Moments":[0.0,0.0,1.0e3]}
+# Flag for different load input formats.
+# Just used for example script, not passed to SONATA
+flag_constant_loads = False
+
+if flag_constant_loads:
+    # forces, N (F1: axial force
+    #            F2: x-direction shear force
+    #            F3: y-direction shear force)
+    # moments, Nm (M1: torsional moment,
+    #              M2: bending moment about x, (axis parallel to chord)
+    #              M3: bending moment around y)
+    Loads_dict = {"Forces":[0.0,0.0,0.0],"Moments":[0.0,1.0e3,0.0]}
+else:
+
+    # Forces and moments have a first column of the station (normalized length)
+    # The next three columns are force/moment values at the given stations.
+    # See above for the description of what the columns are.
+    # Linear interpolation is used between stations.
+
+    recover_Forces = np.array([[0.0, 0.0, 0.0, 1.0e3],
+                               [1.0, 0.0, 0.0, 0.0]])
+
+    recover_Moments = np.array([[0.0, 0.0, 0.0, 0.0],
+                                [1.0, 0.0, 0.0, 0.0]])
+
+    Loads_dict = {"Forces" : recover_Forces,
+                  "Moments": recover_Moments}
 
 # Set damping for BeamDyn input file
 delta = np.array([0.03, 0.03, 0.06787]) # logarithmic decrement, natural log of the ratio of the amplitudes of any two successive peaks. 3% flap and edge, 6% torsion
@@ -107,7 +127,16 @@ job.blade_plot_sections(attribute=attribute_str, plotTheta11=flag_plotTheta11, p
 if flag_3d:
     job.blade_post_3dtopo(flag_wf=flags_dict['flag_wf'], flag_lft=flags_dict['flag_lft'], flag_topo=flags_dict['flag_topo'])
 
-# ===== Analytical Calculations ===== #
+# ===== Analytical Calculations for Stress Verification ===== #
+
+if flag_constant_loads:
+    reference_moments = Loads_dict['Moments']
+    reference_forces = Loads_dict['Forces']
+
+else:
+    # Take forces/moments at the root.
+    reference_moments = Loads_dict['Moments'][0, 1:]
+    reference_forces = Loads_dict['Forces'][0, 1:]
 
 print('Analytical Stresses for Rectangular Input:')
 
@@ -127,22 +156,22 @@ Iy = (1/12)*((width_outer**3)*height_outer - (width_inner**3)*height_inner)
 area = height_outer*width_outer - height_inner*width_inner
 
 # Sigma 11 calculations for Bending
-sigma_max_Mx = Loads_dict['Moments'][1] * (height_outer / 2) / Ix
+sigma_max_Mx = reference_moments[1] * (height_outer / 2) / Ix
 print('\nMax sigma11 for just Mx moment is: {:.2f}'.format(sigma_max_Mx))
 
 # Sigma 11 calculation for Bending around X
-sigma_max_My = Loads_dict['Moments'][2] * (width_outer / 2) / Iy
+sigma_max_My = reference_moments[2] * (width_outer / 2) / Iy
 print('\nMax sigma11 for just My moment is: {:.2f}'.format(sigma_max_My))
 
 print('\nUniform sigma11 for just Fx is: {:.2f}'.format(
-    Loads_dict['Forces'][0]/area))
+    reference_forces[0]/area))
 print('Note that the colorbar tends to be of the format the number on the top')
 print('plus the values labeled on the color bar. So this does match.')
 
 Q = thickness*height_outer*(width_outer/2 - 0.5*thickness) \
     + 2*thickness*(width_inner/2)*(width_inner/4)
 
-sigma12 = Loads_dict['Forces'][1] * Q / (2*thickness * Iy)
+sigma12 = reference_forces[1] * Q / (2*thickness * Iy)
 
 print('\nMax sigma12 (beam center) for just Fx is: {:.2e}'.format(sigma12))
 
@@ -150,7 +179,7 @@ print('\nMax sigma12 (beam center) for just Fx is: {:.2e}'.format(sigma12))
 Q = thickness*width_outer*(height_outer/2 - 0.5*thickness) \
     + 2*thickness*(height_inner/2)*(height_inner/4)
 
-sigma13 = Loads_dict['Forces'][2] * Q / (2*thickness * Ix)
+sigma13 = reference_forces[2] * Q / (2*thickness * Ix)
 
 print('\nMax sigma13 (beam center) for just Fy is: {:.2e}'.format(sigma13))
 
@@ -163,7 +192,7 @@ radius = 0.5
 thickness = 0.1
 J = np.pi/2 * (radius**4 - (radius-thickness)**4)
 
-tau_max_Mz = Loads_dict['Moments'][0] * radius / J
+tau_max_Mz = reference_moments[0] * radius / J
 
 print('Max sigma12/sigma13 (outer surface) for Torsion: ' +
       '{:.2e}'.format(tau_max_Mz))

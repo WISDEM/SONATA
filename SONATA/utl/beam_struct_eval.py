@@ -66,9 +66,39 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
     # --------------------------------------- #
     # --- ANBAX --- #
     if flags_dict['flag_recovery'] == True:
-        loads = {  # sonata coord system input converted to anbax coordinates
-            "F":    np.array([[0, float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2]), float(loads_dict["Forces"][0])],    [1, float(loads_dict["Forces"][1]), float(loads_dict["Forces"][2]), float(loads_dict["Forces"][0])]]),  # forces, N (F1: shear force in x-direction; F2: shear force in y -direction; F3: axial force)
-            "M":    np.array([[0, float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2]), float(loads_dict["Moments"][0])],    [1, float(loads_dict["Moments"][1]), float(loads_dict["Moments"][2]), float(loads_dict["Moments"][0])]])}  # moments, Nm (M1: bending moment around x; M2: bending moment around y; M3: torsional moment)
+
+        if np.asarray(loads_dict['Forces']).shape == (3,):
+            # Assume the format is provided for just a uniform load at all
+            # sections
+
+            # forces, N (F1: shear force in x-direction;
+            # F2: shear force in y -direction;
+            # F3: axial force)
+            Forces = [float(loads_dict["Forces"][1]),
+                      float(loads_dict["Forces"][2]),
+                      float(loads_dict["Forces"][0])]
+
+            # moments, Nm (M1: bending moment around x;
+            #              M2: bending moment around y;
+            #              M3: torsional moment)
+            Moments = [float(loads_dict["Moments"][1]),
+                       float(loads_dict["Moments"][2]),
+                       float(loads_dict["Moments"][0])]
+
+            loads = {# sonata coord system input converted to anbax coordinates
+                "F":    np.array([[0] + Forces,
+                                  [1] + Forces]),
+                "M":    np.array([[0] + Moments,
+                                  [1] + Moments]),
+                }
+
+        else:
+            # Input has first column of station (normalized). Other columns
+            # are same as above, but have indices starting from 1.
+            loads = {
+                "F" : loads_dict["Forces"][:, [0, 2, 3, 1]],
+                "M" : loads_dict["Moments"][:, [0, 2, 3, 1]]
+                    }
 
         job.blade_run_anbax(loads)  # run anbax
     else:
