@@ -413,7 +413,7 @@ class CBM(object):
         except:
             print('\n')
             print('==========================================\n\n')
-            print('Error, Anba4 wrapper called, but ')
+            print('Error, Anba4 wrapper called, likely ')
             print('Anba4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
 

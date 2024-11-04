@@ -83,6 +83,15 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     `midpoint_nd_arc` can be defined with values on a grid or with
     `fixed : LE` or `fixed : TE` for the leading and trailing edges
     respectively.
+
+    At all stations, shear webs are sorted into a list by
+    ['start_nd_arc']['values'][0]. Material cannot be placed on the second
+    web without also placing material on the first web or an indexing error
+    will occur. If shear webs do not start at 0 span, define an extra grid
+    point at zero span to obtain the correct sorting.
+
+    Layers around the shear web have a default flange of 0.01
+    normalized arc length that is hard coded here.
     """
 
     # Segments and webs
@@ -341,6 +350,30 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
 
                                 # Isotropic -> fill the web
                                 elif (not web_filler_index and isinstance(materials[id_mat].E, float)):
+                                    # An error may occur on the following line
+                                    # under these conditions:
+                                    #   - 2 shear webs
+                                    #   - material on only one of the shear webs
+                                    #   - Shear web with material has smaller
+                                    #     ['start_nd_arc']['values'][0]
+                                    #
+                                    # Error can likely be prevented by:
+                                    #   -If shear webs do not go to zero span,
+                                    #   add an additional grid point at zero
+                                    #   with a dummy value of 'start_nd_arc'
+                                    #   that results in the desired sorted
+                                    #   order.
+                                    #
+                                    # Error appears to be due to the fact that
+                                    # webs are reverse sorted around line 100
+                                    # by ['start_nd_arc']['values'][0].
+                                    # Array indices in tmp2 are determined
+                                    # around line 136 as '2 * j + 2' where 'j'
+                                    # is the index in the sorted list. If one
+                                    # has material on the second web, but not
+                                    # the first, this will result in an error.
+                                    # Changing '2 * j + 2' is insufficient to
+                                    # fix the bug.
                                     tmp2[i]['segments'][id_seg]['filler'] = materials[id_mat].name
 
                                     tmp2[i]['segments'][id_seg]['layup'][0]['name'] = 'dummy'
@@ -352,9 +385,9 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
 
                                     # set_interp = PchipInterpolator(sec['thickness']['grid'],sec['thickness']['values'])
                                     thick_web[i, int(id_seg / 2 - 1)] = thick_web[i, int(id_seg / 2 - 1)] + thick_i
-                                    if thick_web[i, int(id_seg / 2 - 1)] < 0.01:
-                                        thick_web[i, int(id_seg / 2 - 1)] = 0.01
-                                        print('WARNING: web filler cannot be thinner than 10mm. This is adjusted here, but please check the input yaml.')
+                                    if thick_web[i, int(id_seg / 2 - 1)] < 0.006:
+                                        thick_web[i, int(id_seg / 2 - 1)] = 0.006
+                                        print('WARNING: web filler cannot be thinner than 6mm. This is adjusted here, but please check the input yaml.')
                                     web_filler_index = True  #  changes to true as web has now already been filled with material
 
                                 # Orthotropic at trailing edge (_te)
