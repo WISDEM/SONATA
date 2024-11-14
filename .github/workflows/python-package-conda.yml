@@ -65,3 +65,8 @@ jobs:
         run: |
           cd examples/5_IEA_5MW
           python 5_sonata_IEA5.py
+
+      - name: Run example 6
+        run: |
+          cd examples/6_beam_stress
+          python 6_sonata_beam_stress.py
