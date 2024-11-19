@@ -387,3 +387,144 @@ def anbax_export_beam_struct_properties(folder_str, job_str, radial_stations, co
     csv_file.close()
     # -------------------------------------------------- #
     return None
+
+
+def strain_energy_eval(blade, MatID=None):
+    """
+    Calculate the strain energy for a blade with already calculated
+    internal loads.
+
+    Parameters
+    ----------
+    blade : SONATA.classBlade.Blade
+        A blade object from SONATA. The blade response for applied internal
+        forces and moments should already be calculated.
+    MatID : int or None, optional
+        Which material should be post processed.
+        Cells with other materials will be ignored.
+        Input is not fully tested yet.
+        If None, then all materials will be included in results.
+        Materials can be checked by looking at `blade.materials`
+        The default is None.
+
+    Returns
+    -------
+    total_energy : float
+        Total energy in the material across the full length of the blade.
+    directional_energy : (6,) numpy.ndarray
+        Energy contributions from each direction (see Notes for ordering).
+    strain_all : list of (6,Ni) numpy.ndarray
+        Strain values for each direction and relevant element.
+        Each list entry corresponds to a different section each of which has
+        a numpy.ndarray. The first index of the numpy.narray is the direction
+        (see Notes) and the second is the cell. Not all cells may be included
+        if `MatID` is used to filter elements. In that case NaN is returned
+        for cells that do not match `MatID`.
+    energy_all : list of (6,Ni) numpy.ndarray
+        Same format as `strain_all`, but records the total energy associated
+        with the corresponding elements.
+
+    Notes
+    -----
+
+    Stress and strain are processed in the material coordinates.
+    For no rotation of the material, directions are
+    1 - axial to the blade,
+    2 - along the arclength of a given section,
+    3 - through the thickness of layers.
+
+    Stress and strain directions of shear webs have not been verified.
+
+    Output stress/strain/directional components are in the order
+    [11, 22, 33, 23, 13, 12]
+
+    Trapezoid integration is used to calculate total energy using sections
+    provided in `blade`.
+
+    If the blade definition used kg,m,s units, then the output energy will be
+    in units of J.
+
+    Strain energy is integrated with respect to the spanwise-length of the
+    blade.
+    It may be more accurate to integrate with respect to the arclength of the
+    reference line.
+
+    """
+
+    length = blade.yml['components']['blade']['outer_shape_bem'] \
+                    ['reference_axis']['z']['values'][-1]
+
+    # Energy calculated in material coordinates.
+    energyM_length = np.zeros((len(blade.sections), 6))
+
+    strain_all = len(blade.sections) * [None]
+    energy_all = len(blade.sections) * [None]
+
+    stations_array = np.array([sec[0] for sec in blade.sections])
+
+    quad_length_weights = np.zeros(len(blade.sections))
+    quad_length_weights[0]    = 0.5*(stations_array[1] - stations_array[0])
+    quad_length_weights[-1]   = 0.5*(stations_array[-1] - stations_array[-2])
+    quad_length_weights[1:-1] = 0.5*(stations_array[2:] - stations_array[0:-2])
+
+    for sec_ind,section in enumerate(blade.sections):
+
+        (x,cs) = section
+        cells = cs.mesh
+
+        stressM = np.nan*np.zeros((len(cells), 6))
+        strainM = np.nan*np.zeros((len(cells), 6))
+
+        area = np.nan*np.zeros(len(cells))
+
+        for ind,c in enumerate(cells):
+
+            if c.MatID == MatID or MatID == None:
+                # In Material Coordinates
+                # Stresses
+                stressM[ind, 0] = c.stressM.sigma11
+                stressM[ind, 1] = c.stressM.sigma22
+                stressM[ind, 2] = c.stressM.sigma33
+
+                stressM[ind, 3] = c.stressM.sigma23
+                stressM[ind, 4] = c.stressM.sigma13
+                stressM[ind, 5] = c.stressM.sigma12
+
+                # Strains
+                strainM[ind, 0] = c.strainM.epsilon11
+                strainM[ind, 1] = c.strainM.epsilon22
+                strainM[ind, 2] = c.strainM.epsilon33
+
+                strainM[ind, 3] = c.strainM.epsilon23
+                strainM[ind, 4] = c.strainM.epsilon13
+                strainM[ind, 5] = c.strainM.epsilon12
+
+                # Area
+                area[ind] = c.calc_area()
+
+        # mask out all of the other materials
+        mask = np.logical_not(np.isnan(area))
+
+        stressM = stressM[mask, :]
+        strainM = strainM[mask, :]
+        area = area[mask]
+
+        # In material coordinates
+        energyM_density = 0.5*stressM*strainM
+
+        # The shear components have a factor of 2 in the contraction
+        energyM_density[:, 3:] *= 2
+
+        # Energy per length along the beam
+        energyM_length[sec_ind, :] = energyM_density.T @ area
+
+        # Collect statistics for distribution of energy v. strain.
+        strain_all[sec_ind] = strainM
+        energy_all[sec_ind] = energyM_density * area.reshape(-1,1) \
+                                    * quad_length_weights[sec_ind] * length
+
+    directional_energy = np.trapz(energyM_length.T, stations_array) * length
+
+    total_energy = np.sum(directional_energy)
+
+    return total_energy, directional_energy, strain_all, energy_all

@@ -1,7 +1,7 @@
 import os
 import numpy as np
 from SONATA.classBlade import Blade
-from SONATA.utl.beam_struct_eval import beam_struct_eval
+from SONATA.utl.beam_struct_eval import beam_struct_eval, strain_energy_eval
 
 
 # Path to yaml file
@@ -99,7 +99,7 @@ else:
     # See above for the description of what the columns are.
     # Linear interpolation is used between stations.
 
-    recover_Forces = np.array([[0.0, 0.0, 0.0, 1.0e3],
+    recover_Forces = np.array([[0.0, 0.0, 1.0e3, 0.0],
                                [1.0, 0.0, 0.0, 0.0]])
 
     recover_Moments = np.array([[0.0, 0.0, 0.0, 0.0],
@@ -127,6 +127,21 @@ job.blade_plot_sections(attribute=attribute_str, plotTheta11=flag_plotTheta11, p
 if flag_3d:
     job.blade_post_3dtopo(flag_wf=flags_dict['flag_wf'], flag_lft=flags_dict['flag_lft'], flag_topo=flags_dict['flag_topo'])
 
+# ===== Strain Energy Recovery ===== #
+
+if flag_recovery:
+    # This example only has one material, but in other cases can use 'MatID'
+    # input to filter by a specific material.
+    total_energy, directional_energy, strain_all, energy_all \
+        = strain_energy_eval(job, MatID=None)
+
+    print('\n\nFraction of Strain Energy in Components:')
+    component_order = ['11', '22', '33', '23', '13', '12']
+
+    for ind,component in enumerate(component_order):
+        print('Strain Energy {} : {:.4f}'.format(component,
+                                         directional_energy[ind]/total_energy))
+
 # ===== Analytical Calculations for Stress Verification ===== #
 
 if flag_constant_loads:
@@ -138,7 +153,7 @@ else:
     reference_moments = Loads_dict['Moments'][0, 1:]
     reference_forces = Loads_dict['Forces'][0, 1:]
 
-print('Analytical Stresses for Rectangular Input:')
+print('\n\nAnalytical Stresses for Rectangular Input:')
 
 thickness = 0.1
 
