@@ -459,6 +459,9 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst,
                 # 1. Instead of increasing crit_angle, one could re-evaluate if
                 # 'aglTol' is appropriate.
                 # 2. Or instead one could adopt a different approach here.
+                #
+                # If increasing crit_angle, change the default under
+                # SONATA/cbm/topo/layer/def mesh_layer
 
             # ===CORNERSTYLE 5======
             elif len(exterior_corners) > 2 and node.corner == True:

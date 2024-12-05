@@ -174,7 +174,9 @@ class Layer(object):
         self.a_nodes = remove_duplicates_from_list_preserving_order(new_a_nodes)
         self.a_nodes = merge_nodes_if_too_close(self.a_nodes, self.a_BSplineLst, global_minLen, 0.01)
 
-    def mesh_layer(self, SegmentLst, global_minLen, proj_tol_1=9e-2, proj_tol_2=4e-1, crit_angle_1=115, alpha_crit_2=60, growing_factor=1.8, shrinking_factor=0.01, display=None, l0=None):
+    def mesh_layer(self, SegmentLst, global_minLen, proj_tol_1=9e-2, 
+                   proj_tol_2=4e-1, crit_angle_1=150, alpha_crit_2=60, 
+                   growing_factor=1.8, shrinking_factor=0.01, display=None, l0=None):
         """
         The mesh layer function discretizes the layer, which is composed of a 
         a_BsplineLst and a b_BsplineLst. Between the a_BsplineLst and the 
@@ -198,7 +200,7 @@ class Layer(object):
         proj_tol_2 = 2e-1:      tolerance value to determine a distance, 
                                 in which the resulting projection point 
                                 has to be. (modify_sharp_corners)
-        crit_angle_1 = 115:     is the critical angle to determine a corner 
+        crit_angle_1 = 150:     is the critical angle to determine a corner 
                                 if 2 projection points are found.
                                 If this value is too small, can hit a case were
                                 both projections are seen as corners, but the
