@@ -18,7 +18,7 @@ flag_ref_axes_wt        = True # if true, rotate reference axes from wind defini
 # Define mesh resolution, i.e. the number of points along the profile that is used for out-to-inboard meshing of a 2D blade cross section
 mesh_resolution = 400
 # For plots within blade_plot_sections
-attribute_str           = 'stress.sigma11'  # default: 'MatID' (theta_3 - fiber orientation angle)
+attribute_str           = 'strainM.epsilon12'  # default: 'MatID' (theta_3 - fiber orientation angle)
                                             # others:  'theta_3' - fiber orientation angle
                                             #          'stress.sigma11' (use sigma_ij to address specific component)
                                             #          'stressM.sigma11'
@@ -98,11 +98,13 @@ else:
     # The next three columns are force/moment values at the given stations.
     # See above for the description of what the columns are.
     # Linear interpolation is used between stations.
+    # Set forces or moments at the 0.0 station to have analytical stress/strain
+    # output to compare to.
 
-    recover_Forces = np.array([[0.0, 0.0, 1.0e3, 0.0],
+    recover_Forces = np.array([[0.0, 0.0, 0.0, 0.0],
                                [1.0, 0.0, 0.0, 0.0]])
 
-    recover_Moments = np.array([[0.0, 0.0, 0.0, 0.0],
+    recover_Moments = np.array([[0.0, 1.0e3, 0.0, 0.0],
                                 [1.0, 0.0, 0.0, 0.0]])
 
     Loads_dict = {"Forces" : recover_Forces,
@@ -212,4 +214,10 @@ tau_max_Mz = reference_moments[0] * radius / J
 print('Max sigma12/sigma13 (outer surface) for Torsion: ' +
       '{:.2e}'.format(tau_max_Mz))
 
+shear_mod = job.materials[1].E / (2* ( 1 + job.materials[1].nu ))
 
+print('Max gamma12/gamma13 - engineering strain (outer surface) for Torsion: ' +
+      '{:.2e}'.format(tau_max_Mz/shear_mod))
+
+print('Max epsilon12/epsilon13 - elasticity strain tensor component (outer surface) for Torsion: ' +
+      '{:.2e}'.format(tau_max_Mz/shear_mod/2))

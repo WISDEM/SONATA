@@ -5,8 +5,8 @@ components:
         outer_shape_bem:
             airfoil_position:
                 grid: [0.0, 1.0]
-                labels: [rectangular, rectangular]
-                # labels: [circular, circular] # Can use to verify torsion stresses.
+                # labels: [rectangular, rectangular]
+                labels: [circular, circular] # Can use to verify torsion stresses.
             chord:
                 grid: [0.0, 1.0]
                 values: [1., 1.]
