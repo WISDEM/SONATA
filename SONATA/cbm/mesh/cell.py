@@ -21,7 +21,12 @@ from SONATA.cbm.topo.utils import (PolygonArea, calc_angle_between,
 
 
 class Cell(object):
-    __slots__ = ("id", "nodes", "theta_1", "theta_3", "MatID", "structured", "interior_nodes", "strain", "strainM", "stress", "stressM", "sf", "failure_mode")
+    __slots__ = ("id", "nodes", "theta_1", "theta_3", "MatID", "structured",
+                 "interior_nodes", "strain", "strainM", "stress", "stressM",
+                 "sf", "failure_mode","fm_to_strain")
+    # fm_to_strain is the the mapping calculated with ANBA from the 
+    # Force/Moment at section to the strain (using engineering shear strain)
+    # within the element.
     class_counter = 1
 
     def __init__(self, nodeLst):  # int
@@ -62,6 +67,10 @@ class Cell(object):
     @property
     def area(self):
         return self.calc_area()
+    
+    @property
+    def center(self):
+        return self.calc_center()
 
     @property
     def orientation(self):
@@ -131,6 +140,25 @@ class Cell(object):
         for node in self.nodes:
             corners.append(node.coordinates)
         return PolygonArea(corners)
+    
+    def calc_center(self):
+        """Calculates the coordinates of the center of mass of the element"""
+        corners = []
+        for node in self.nodes:
+            corners.append(node.coordinates)
+        
+        if len(corners) == 3:
+            # See https://en.wikipedia.org/wiki/Centroid#Of_a_triangle
+            center = np.array(corners).mean(axis=0)
+        else:
+            # could implement:
+            # https://en.wikipedia.org/wiki/Centroid#Of_a_polygon
+            print('Center not calculated for non-triangular cells,'
+                  + ' returning nan.')
+            center = np.array([np.nan, np.nan])
+        
+        return center
+        
 
     def calc_orientation(self):
         """Calculates the orientation of the cell.

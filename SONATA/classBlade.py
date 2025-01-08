@@ -533,8 +533,31 @@ class Blade(Component):
         # self.anba_beam_properties = np.asarray(lst)
         self.beam_properties = np.asarray(lst)
         return None      
-        
-        
+
+    def blade_run_viscoelastic(self, **kwargs):
+        """
+        Runs anbax for every section to evaluate viscoelastic 6x6 matrices.
+
+        """
+
+        print('Running viscoelastic analysis. This requires calling ANBAX'
+              + ' multiple times per section.')
+
+        ac = ANBAXConfig()
+        lst = []
+        for (x, cs) in self.sections:
+
+            cs.config.anbax_cfg = ac
+
+            print("STATUS:\t Running Viscoelastic Analysis at grid location %s" % (x))
+            cs.cbm_run_viscoelastic(**kwargs)
+            lst.append([x, cs.BeamProperties])
+
+        # self.anba_beam_properties = np.asarray(lst)
+        self.beam_properties = np.asarray(lst)
+
+        return None
+
      
     def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0, solver='vabs', filename = None):
         """
@@ -793,9 +816,6 @@ class Blade(Component):
         arr = np.asarray(lst)
 
         return arr
-
-
-
 
 
 

@@ -454,6 +454,141 @@ class CBM(object):
 
         return
 
+
+    def cbm_run_viscoelastic(self, test_elastic=True):
+        """
+        Calculation of viscoelastic 6x6 matrices at the section.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        self.mesh, nodes = sort_and_reassignID(self.mesh)
+
+        try:
+            (mesh, matLibrary, materials, plane_orientations,
+             fiber_orientations, maxE) = build_dolfin_mesh(self.mesh,
+                                                       nodes, self.materials)
+        except:
+            print('\n')
+            print('==========================================\n\n')
+            print('Error, Anba4 wrapper called, likely ')
+            print('Anba4 _or_ Dolfin are not installed\n\n')
+            print('==========================================\n\n')
+
+
+        # Call ANBAX with baseline properties
+        anba = anbax(mesh, 1, matLibrary, materials, plane_orientations,
+                     fiber_orientations, maxE)
+        
+        tmp_TS = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
+        tmp_MM = anba.inertia().getValues(range(6),range(6))    # get mass matrix
+
+        # Define transformation T (from ANBA to SONATA/VABS coordinates)
+        B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
+        T = np.dot(np.identity(3), np.linalg.inv(B))
+
+        self.BeamProperties = BeamSectionalProps()
+        self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
+        self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
+
+        # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
+        self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
+        self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+
+        # Recover the mapping from sectional Forces and Moments to Strain
+        # in a non-invasive way from ANBA
+        
+        # 1. Initialize memory on each element to store the mapping
+        # ASSIGN stresses and strains to mesh elements:
+        for i,c in enumerate(self.mesh):
+            
+            c.fm_to_strain = np.zeros((6,6))
+        
+        # 2. Call ANBA looping over unit forces/moments
+        for i in range(6):
+            
+            F = [0.0, 0.0, 0.0]
+            M = [0.0, 0.0, 0.0]
+            
+            if i < 3:
+                F[i] = 1.0
+            else:
+                M[i - 3] = 1.0
+            
+            # This ends up being potentially excessively slow since
+            # it does a new calculation for each stress and strain field (4),
+            # but only need the global coordinate strain field.
+            [tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran] = \
+                anbax_recovery(anba, len(self.mesh), F, M,
+                               self.config.anbax_cfg.voigt_convention, T)
+        
+        
+            # 3. Store Strain results in each case / element
+            for j,c in enumerate(self.mesh):
+            
+                # This creates a Strain class object that clearly identifies
+                # elasticity strain tensor components (epsilon) versus
+                # engineering shear strain components (gamma).
+                # While is is probably unneccesary for computation, it is done for
+                # code clarity.
+                curr_strain = Strain([tmp_StrainF_tran[j,0,0],
+                                      tmp_StrainF_tran[j,0,1],
+                                      tmp_StrainF_tran[j,0,2],
+                                      tmp_StrainF_tran[j,1,1],
+                                      tmp_StrainF_tran[j,1,2],
+                                      tmp_StrainF_tran[j,2,2]])
+
+                c.fm_to_strain[:, i] = np.array([curr_strain.epsilon11,
+                                                 curr_strain.epsilon22,
+                                                 curr_strain.epsilon33,
+                                                 curr_strain.gamma23,
+                                                 curr_strain.gamma13,
+                                                 curr_strain.gamma12])
+
+        # 4. Create a material dictionary for each time scale.
+        #    The will loop over those time scales
+
+        # 5. calculate integrated element contributions
+        # This mapping is just the partial product that maps force/moments
+        # back to forces/moments (or time derivatives to be integrated)
+        force_to_forcedot = np.zeros((6,6))
+
+        ze = np.zeros((6,6))
+        ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+        ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+        ze[2, 0] = 1.0 # axial stress -> axial force
+
+        for i,c in enumerate(self.mesh):
+
+            cxy = c.center
+
+            ze[3, 0] = cxy[1] # axial stress -> moment around x
+            ze[4, 0] = -cxy[0] # axial stress -> moment around y
+
+            ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+            ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+
+            De = self.materials[c.MatID].rotated_constitutive_tensor(
+                                                     c.theta_1[0], c.theta_3)
+
+            force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+
+        if test_elastic:
+            error = np.linalg.norm(force_to_forcedot - np.eye(6))
+            
+            print('Error in recovering elastic 6x6 with mappings is: {:.3e}'
+                  .format(error))
+
+        viscous6x6 = trsf_sixbysix(force_to_forcedot @ tmp_TS, T)
+
+        # save the data somehow.
+        print('Need to format saving 6x6 and exporting (with extra rotations).')
+
+        return viscous6x6
+
     def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):
         """ 
         Converts the Beam Properties of CBM to the correct coordinate System of
