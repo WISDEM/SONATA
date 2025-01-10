@@ -695,13 +695,14 @@ class CBM(object):
             print('Adding all time scale 6x6 v. baseline error: '
                   + 'absolute: {:.3e}, relative: {:.3e}'
                   .format(error, error/mag))
+            
+            print('This error should be small if the (sum of the elastic'
+                  + ' modulus and shear modulus at all time scales) equals'
+                  + ' the reference elastic and shear moduli.')
 
         self.BeamProperties.TSv = viscoelastic_6x6
         self.BeamProperties.tau = time_scale_list
         
-        # save the data somehow.
-        print('Need to format saving 6x6 and exporting (with extra rotations).')
-        breakpoint()
         return viscoelastic_6x6
 
     def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):

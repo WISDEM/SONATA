@@ -14,6 +14,8 @@ filename_str = run_dir + job_str
 flag_wt_ontology        = True # if true, use ontology definition of wind turbines for yaml files
 flag_ref_axes_wt        = True # if true, rotate reference axes from wind definition to comply with SONATA (rotorcraft # definition)
 
+flag_viscoelastic = True # flag to run viscoelastic 6x6 matrices calculation.
+
 # --- plotting flags ---
 # Define mesh resolution, i.e. the number of points along the profile that is used for out-to-inboard meshing of a 2D blade cross section
 mesh_resolution = 400
@@ -75,6 +77,7 @@ flags_dict['flag_csv_export'] = flag_csv_export
 flags_dict['flag_DeamDyn_def_transform'] = flag_DeamDyn_def_transform
 flags_dict['flag_write_BeamDyn'] = flag_write_BeamDyn
 flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert
+flags_dict['viscoelastic'] = flag_viscoelastic
 
 # Flag for different load input formats.
 # Just used for example script, not passed to SONATA
@@ -109,7 +112,7 @@ else:
 # Set damping for BeamDyn input file
 mu = np.array([0.0, 0.0, 0.0, 0.0, 0.0, 0.0])
 
-job.blade_run_viscoelastic()
+# job.blade_run_viscoelastic()
 
 beam_struct_eval(flags_dict, Loads_dict, radial_stations, job, run_dir,
                  job_str, mu)

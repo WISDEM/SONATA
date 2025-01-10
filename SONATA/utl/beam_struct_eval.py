@@ -15,7 +15,8 @@ import csv
 import os
 
 from SONATA.cbm.cbm_utl import trsf_sixbysix
-from SONATA.utl_openfast.utl_sonata2beamdyn import convert_structdef_SONATA_to_beamdyn, write_beamdyn_axis, write_beamdyn_prop
+from SONATA.utl_openfast.utl_sonata2beamdyn import convert_structdef_SONATA_to_beamdyn, \
+    write_beamdyn_axis, write_beamdyn_prop, write_beamdyn_viscoelastic
 
 # from SONATA.utl.analytical_rectangle.utls_analytical_rectangle import utls_analytical_rectangle
 
@@ -53,9 +54,18 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
     Forces =  np.array([0, 0, 0])  # forces, N (F1: axial force; F2,F3: sectional transverse shear forces)
     Moments =  np.array([0, 5000000, 0])  # moments, Nm
     loads_dict = {"Forces": Forces, "Moments": Moments}
+    
+    Notes
+    -----
+    
+    Flag options for `flags_dict` include `'viscoelastic' : True` to evaluate
+    viscoelastic 6x6 matrices and save them in an additional file. This flag
+    is optional and is assumed `False` by default.
 
     """
-
+    
+    if 'viscoelastic' not in flags_dict.keys():
+        flags_dict['viscoelastic'] = False
 
     # --- ANBAX --- #
     # --------------------------------------- #
@@ -65,7 +75,7 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
 
     # --------------------------------------- #
     # --- ANBAX --- #
-    if flags_dict['flag_recovery'] == True:
+    if flags_dict['flag_recovery'] == True and not flags_dict['viscoelastic']:
 
         if np.asarray(loads_dict['Forces']).shape == (3,):
             # Assume the format is provided for just a uniform load at all
@@ -101,8 +111,16 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
                     }
 
         job.blade_run_anbax(loads)  # run anbax
-    else:
+    elif not flags_dict['viscoelastic']:
         job.blade_run_anbax()  # run anbax
+    else:
+        # flags_dict['viscoelastic'] == True
+        
+        if flags_dict['flag_recovery']:
+            print('Recovery of stress/strain not supported with viscoelastic'
+                  + ' material simulations.')
+        
+        job.blade_run_viscoelastic()
 
     # init used matrices and arrays
     anbax_beam_stiff_init = np.zeros([len(cs_pos), 6, 6])
@@ -110,6 +128,10 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
     anbax_beam_stiff = np.zeros([len(cs_pos), 6, 6])
     anbax_beam_inertia = np.zeros([len(cs_pos), 6, 6])
     anbax_beam_section_mass = np.zeros([len(cs_pos), 1])
+    
+    if flags_dict['viscoelastic']:
+        anbax_beam_viscoelastic \
+            = np.zeros((len(cs_pos), len(job.beam_properties[0][1].tau), 6, 6))
 
     # --------------------------------------- #
     # retrieve & allocate ANBAX results
@@ -119,7 +141,10 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
             anbax_beam_stiff_init[i, j, :] = np.array(job.beam_properties[i, 1].TS[j, :])  # receive 6x6 timoshenko stiffness matrix
             anbax_beam_inertia_init[i, j, :] = np.array(job.beam_properties[i, 1].MM[j, :])  # receive 6x6 mass matrix
 
-
+        if flags_dict['viscoelastic']:
+            for k in range(len(job.beam_properties[0][1].tau)):
+                anbax_beam_viscoelastic[i, k, :, :] = job.beam_properties[i, 1].TSv[k]
+    
     # --------------------------------------- #
     #  rotate anbax results from SONATA/VABS def to BeamDyn def coordinate system (for flag_DeamDyn_def_transform = True)
     if flags_dict['flag_DeamDyn_def_transform']:
@@ -130,6 +155,13 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
         for n_sec in range(len(cs_pos)):
             anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff_init[n_sec, :, :], T)
             anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia_init[n_sec, :, :], T)
+            
+            if flags_dict['viscoelastic']:
+                for k in range(len(job.beam_properties[0][1].tau)):
+                    anbax_beam_viscoelastic[i, k, :, :] = trsf_sixbysix(
+                                        anbax_beam_viscoelastic[i, k, :, :], T)
+                    
+            
         str_ext = '_BeamDyn_def'
         coordsys = 'BeamDyn'
 
@@ -166,6 +198,14 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
         write_beamdyn_axis(folder_str, flags_dict, job.yml.get('name'), job.blade_ref_axis, job.twist)
         write_beamdyn_prop(folder_str, flags_dict, job.yml.get('name'), cs_pos, anbax_beam_stiff, anbax_beam_inertia, mu)
 
+        if flags_dict['viscoelastic']:
+            
+            print('STATUS:\t Writing viscoelastic BeamDyn input file.')
+            write_beamdyn_viscoelastic(folder_str, flags_dict,
+                                       job.yml.get('name'), cs_pos,
+                                       job.beam_properties[0][1].tau,
+                                       anbax_beam_viscoelastic)
+            # write_beamdyn_viscoelastic
 
 
 

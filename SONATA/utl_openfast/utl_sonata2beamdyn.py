@@ -232,6 +232,53 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations, beam_stiff,
 
     return None
 
+# --- Write BeamDyn_Blade file with blade properties ---#
+def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
+                               time_scales, beam_viscoelastic):
+    n_pts = len(radial_stations)
+
+    output_name = os.path.join(folder , wt_name + '_BeamDyn_Blade_Viscoelastic.dat')
+    
+    print(output_name)
+
+    # file = open(folder + '00_analysis/analysis/' + wt_name + '_BeamDyn_Blade.dat', 'w')
+    file = open(output_name, 'w')
+    file.write(' ------- BEAMDYN V1.00.* INDIVIDUAL BLADE INPUT FILE --------------------------\n')
+    file.write(' Test Format 1\n')
+    file.write(' ---------------------- BLADE PARAMETERS --------------------------------------\n')
+    file.write('{:d}   station_total        - Number of blade input stations (-)\n'
+               .format(n_pts))
+    file.write('{:d}   time_scales_total    - Number of blade input stations (-)\n'
+               .format(len(time_scales)))
+    file.write('  ---------------------- Time Scales (s) ------------------------------------\n')
+    file.write(''.join(str(t)+',   ' for t in time_scales)[:-4] + '\n')
+    file.write(' ---------------------- DISTRIBUTED PROPERTIES---------------------------------\n')
+
+    assert not (flags_dict['flag_write_BeamDyn_unit_convert'] == 'mm_to_m'), \
+        'Viscoelastic beam property output does not support unit conversion.'
+
+    for i in range(n_pts):
+        file.write('\t %.6f \n' % (radial_stations[i]))
+        # loop over time scales
+        for k in range(len(time_scales)):
+            
+            curr_stiff = beam_viscoelastic[i, k, :, :]
+        
+            # write stiffness matrices
+            for j in range(6):
+                file.write('\t %.16e \t %.16e \t %.16e \t %.16e \t %.16e \t %.16e\n' % (
+                curr_stiff[j, 0], curr_stiff[j, 1], curr_stiff[j, 2],
+                curr_stiff[j, 3], curr_stiff[j, 4], curr_stiff[j, 5]))
+            file.write('\n')
+
+        # ToDO: check correct translation of stiffness and mass matrices from VABS and anbax !!!
+    file.close()
+
+    print('Finished writing BeamDyn_Blade_Viscoelastic File')
+    
+    return None
+
+
 def convert_stiff_matrix(beam_stiff, flags_dict):
     if flags_dict['flag_write_BeamDyn_unit_convert'] == 'mm_to_m':
         for j in range(6):  # row
