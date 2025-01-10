@@ -94,6 +94,10 @@ class BeamSectionalProps(object):
         Trapeze Effects Related Matrices
     Dk: ndarray
         Trapeze Effects Related Matrices   
+    tau : list of float
+        List of time scales for viscoelastic material stiffnesses.
+    TSv : list of ndarray
+        List of stiffness arrays associated with viscoelastic time scales `tau`
 
 
     Properties
@@ -127,7 +131,7 @@ class BeamSectionalProps(object):
     """    
     
     __slots__ = ('TS', 'MM', 'Xg', 'Xt', 'Xs', 'Delta', 'PIA', 'VS', 'Ag', \
-                 'Bk', 'Ck', 'Dk', 'ELE', 'U')
+                 'Bk', 'Ck', 'Dk', 'ELE', 'U', 'tau', 'TSv')
     
 
     def __init__(self, fname=None):
@@ -143,6 +147,8 @@ class BeamSectionalProps(object):
         self.Bk = None
         self.Ck = None
         self.Dk = None
+        self.tau = None
+        self.TSv = None
 
         self.ELE = None
         self.U = None

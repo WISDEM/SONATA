@@ -9,6 +9,8 @@ https://numpydoc.readthedocs.io/en/latest/format.html
 # Core Library modules
 import copy
 import math
+from collections import OrderedDict
+
 # Basic PYTHON Modules:
 import pickle as pkl
 from datetime import datetime
@@ -38,6 +40,7 @@ from SONATA.vabs.classStress import Stress
 from SONATA.cbm.topo.projection import (
     chop_interval_from_layup, sort_layup_projection,)
 # from SONATA.vabs.classVABSConfig import VABSConfig
+from SONATA.classMaterial import IsotropicMaterial, OrthotropicMaterial
 
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
 from OCC.Core.gp import gp_Pnt2d
@@ -455,7 +458,7 @@ class CBM(object):
         return
 
 
-    def cbm_run_viscoelastic(self, test_elastic=True):
+    def cbm_run_viscoelastic(self, test_elastic=True, test_tau0=True):
         """
         Calculation of viscoelastic 6x6 matrices at the section.
 
@@ -550,44 +553,156 @@ class CBM(object):
 
         # 4. Create a material dictionary for each time scale.
         #    The will loop over those time scales
+        time_scale_list = []
+        
+        for MatID in self.materials:
+            time_scale_list += self.materials[MatID]\
+                                    .viscoelastic['time_scales_v'].tolist()
+        
+        time_scale_list = np.sort(np.unique(time_scale_list)).tolist()
+        
+        time_scale_mat_dicts = len(time_scale_list) * [None]
+        
+        # breakpoint()
+        
+        for i, tau in enumerate(time_scale_list):
+            
+            curr_materials = OrderedDict()
+            
+            for MatID in self.materials:
+                
+                mat = self.materials[MatID]
+                
+                if hasattr(mat, 'viscoelastic'):
+                    found_time_scale = tau in mat.viscoelastic['time_scales_v'].tolist()
+                else:
+                    found_time_scale = False
+                
+                if not found_time_scale:
+                    # Set material as isotropic with no stiffness
+                    # nu value is irrelevant since E=0.0
+                    curr_dict = {'nu' : 0.0,
+                                 'E'  : 0.0}
+                    
+                    curr_materials[MatID] = IsotropicMaterial(ID=MatID,
+                                                                **curr_dict)
+                else:
+                    # find index of time scale
+                    time_scale_ind = np.argmax(tau 
+                                          == mat.viscoelastic['time_scales_v'])
+                
+                if found_time_scale and mat.orth == 0:
+                    
+                    curr_dict = {'E' : mat.viscoelastic['E_v'][time_scale_ind],
+                                 'nu' : mat.nu,
+                                 'name' : mat.name + ' time scale : {}'.format(tau)}
+
+                    curr_materials[MatID] = IsotropicMaterial(ID=MatID,
+                                                                **curr_dict)
+                elif found_time_scale and mat.orth == 1:
+                    
+                    curr_dict = {'E_1' : mat.viscoelastic['E_1_v'][time_scale_ind],
+                                 'E_2' : mat.viscoelastic['E_2_v'][time_scale_ind],
+                                 'E_3' : mat.viscoelastic['E_3_v'][time_scale_ind],
+                                 'G_12' : mat.viscoelastic['G_12_v'][time_scale_ind],
+                                 'G_13' : mat.viscoelastic['G_13_v'][time_scale_ind],
+                                 'G_23' : mat.viscoelastic['G_23_v'][time_scale_ind],
+                                 'nu' : mat.nu.tolist(),
+                                 'name' : mat.name + ' time scale : {}'.format(tau)}
+
+                    curr_materials[MatID] = OrthotropicMaterial(ID=MatID,
+                                                                flag_mat=False,
+                                                                **curr_dict)
+            time_scale_mat_dicts[i] = curr_materials
 
         # 5. calculate integrated element contributions
         # This mapping is just the partial product that maps force/moments
         # back to forces/moments (or time derivatives to be integrated)
-        force_to_forcedot = np.zeros((6,6))
-
-        ze = np.zeros((6,6))
-        ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
-        ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
-        ze[2, 0] = 1.0 # axial stress -> axial force
-
-        for i,c in enumerate(self.mesh):
-
-            cxy = c.center
-
-            ze[3, 0] = cxy[1] # axial stress -> moment around x
-            ze[4, 0] = -cxy[0] # axial stress -> moment around y
-
-            ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
-            ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
-
-            De = self.materials[c.MatID].rotated_constitutive_tensor(
-                                                     c.theta_1[0], c.theta_3)
-
-            force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+        
+        viscoelastic_6x6 = len(time_scale_list) * [None]
+        
+        for tau_ind, tau in enumerate(time_scale_list):
+            
+            material_dict = time_scale_mat_dicts[tau_ind]
+            
+            force_to_forcedot = np.zeros((6,6))
+    
+            ze = np.zeros((6,6))
+            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+            ze[2, 0] = 1.0 # axial stress -> axial force
+    
+            for i,c in enumerate(self.mesh):
+    
+                cxy = c.center
+    
+                ze[3, 0] = cxy[1] # axial stress -> moment around x
+                ze[4, 0] = -cxy[0] # axial stress -> moment around y
+    
+                ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+                ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+    
+                De = material_dict[c.MatID].rotated_constitutive_tensor(
+                                                    c.theta_1[0], c.theta_3)
+    
+                force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+                
+                
+            viscoelastic_6x6[tau_ind] = trsf_sixbysix(force_to_forcedot @ tmp_TS, T)
 
         if test_elastic:
+            
+            force_to_forcedot = np.zeros((6,6))
+    
+            ze = np.zeros((6,6))
+            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+            ze[2, 0] = 1.0 # axial stress -> axial force
+    
+            for i,c in enumerate(self.mesh):
+    
+                cxy = c.center
+    
+                ze[3, 0] = cxy[1] # axial stress -> moment around x
+                ze[4, 0] = -cxy[0] # axial stress -> moment around y
+    
+                ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+                ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+    
+                De = self.materials[c.MatID].rotated_constitutive_tensor(
+                                                         c.theta_1[0], c.theta_3)
+    
+                force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+            
             error = np.linalg.norm(force_to_forcedot - np.eye(6))
             
             print('Error in recovering elastic 6x6 with mappings is: {:.3e}'
                   .format(error))
 
-        viscous6x6 = trsf_sixbysix(force_to_forcedot @ tmp_TS, T)
+        if test_tau0:
+            # Test that all of the viscoelastic matrices add up to the 
+            # default calculated matrix
+            
+            sum_6x6 = np.zeros((6,6))
+            
+            for mat6x6 in viscoelastic_6x6:
+                sum_6x6 += mat6x6
+            
+            error = np.linalg.norm(self.BeamProperties.TS - sum_6x6)
+            
+            mag = np.linalg.norm(self.BeamProperties.TS)
+            
+            print('Adding all time scale 6x6 v. baseline error: '
+                  + 'absolute: {:.3e}, relative: {:.3e}'
+                  .format(error, error/mag))
 
+        self.BeamProperties.TSv = viscoelastic_6x6
+        self.BeamProperties.tau = time_scale_list
+        
         # save the data somehow.
         print('Need to format saving 6x6 and exporting (with extra rotations).')
-
-        return viscous6x6
+        breakpoint()
+        return viscoelastic_6x6
 
     def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):
         """ 

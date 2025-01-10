@@ -212,9 +212,13 @@ class IsotropicMaterial(Material):
         in N/m**2; Yield Strenth (Streckgrenze)
     UTS : float
         in N/m**2; Ultimate Tensile Strenght (Zugfestigkeit)
+        
+    viscoelastic :
+        Properties associated with different time scales of the material to
+        define viscoelasticity.
     """
 
-    __slots__ = ("E", "nu", "alpha", "YS", "UTS")
+    __slots__ = ("E", "nu", "alpha", "YS", "UTS", "viscoelastic")
 
     def __init__(self, **kw):
         kw["orth"] = 0
@@ -230,6 +234,17 @@ class IsotropicMaterial(Material):
 
         if not kw.get("nu") is None:
             self.nu = float(kw.get("nu"))
+        
+        
+        viscoelastic_mat_keys = ['time_scales_v', 'E_v']
+
+        viscoelastic_dict = {}
+
+        for k in viscoelastic_mat_keys:
+            if not kw.get(k) is None:
+                viscoelastic_dict[k] = np.asarray(kw.get(k)).astype(float)
+
+        self.viscoelastic = viscoelastic_dict
 
         if not kw.get("alpha") is None:
             self.alpha = float(kw.get("alpha"))
@@ -334,9 +349,13 @@ class OrthotropicMaterial(Material):
     S21 :
         in N/m**2; in-/out of plane shear strength 
 
+    viscoelastic :
+        Properties associated with different time scales of the material to
+        define viscoelasticity.
     """
 
-    __slots__ = ('E', 'G', 'nu', 'alpha', 'Xt', 'Xc', 'Yt', 'Yc', 'S21', 'S23')
+    __slots__ = ('E', 'G', 'nu', 'alpha', 'Xt', 'Xc', 'Yt', 'Yc', 'S21', 'S23',
+                 'viscoelastic')
 
     def __init__(self, flag_mat, **kw):
         kw['orth'] = 1
@@ -374,6 +393,17 @@ class OrthotropicMaterial(Material):
 
         if all(k in kw for k in ('alpha_11', 'alpha_22', 'alpha_33')):
             self.alpha = np.array([kw.get('alpha_11'), kw.get('alpha_22'), kw.get('alpha_33')]).astype(float)
+
+        viscoelastic_mat_keys = ['time_scales_v', 'E_1_v', 'E_2_v', 'E_3_v',
+                            'G_12_v', 'G_13_v', 'G_23_v']
+
+        viscoelastic_dict = {}
+
+        for k in viscoelastic_mat_keys:
+            if not kw.get(k) is None:
+                viscoelastic_dict[k] = np.asarray(kw.get(k)).astype(float)
+
+        self.viscoelastic = viscoelastic_dict
 
         if flag_mat:  # wisdem includes vectors for the following material properties that are to be converted in order to comply with SONATA and VABS/anbax
             if not kw.get('Xt') is None:
