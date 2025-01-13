@@ -205,7 +205,6 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
                                        job.yml.get('name'), cs_pos,
                                        job.beam_properties[0][1].tau,
                                        anbax_beam_viscoelastic)
-            # write_beamdyn_viscoelastic
 
 
 

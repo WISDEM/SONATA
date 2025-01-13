@@ -239,8 +239,6 @@ def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
 
     output_name = os.path.join(folder , wt_name + '_BeamDyn_Blade_Viscoelastic.dat')
     
-    print(output_name)
-
     # file = open(folder + '00_analysis/analysis/' + wt_name + '_BeamDyn_Blade.dat', 'w')
     file = open(output_name, 'w')
     file.write(' ------- BEAMDYN V1.00.* INDIVIDUAL BLADE INPUT FILE --------------------------\n')
@@ -274,7 +272,7 @@ def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
         # ToDO: check correct translation of stiffness and mass matrices from VABS and anbax !!!
     file.close()
 
-    print('Finished writing BeamDyn_Blade_Viscoelastic File')
+    print('STATUS:\t Finished writing BeamDyn_Blade_Viscoelastic file.')
     
     return None
 
