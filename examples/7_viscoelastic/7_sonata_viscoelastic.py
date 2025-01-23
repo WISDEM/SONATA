@@ -40,6 +40,8 @@ c2_axis                 = False
 flag_DeamDyn_def_transform = True               # transform from SONATA to BeamDyn coordinate system
 flag_write_BeamDyn = True                       # write BeamDyn input files for follow-up OpenFAST analysis (requires flag_DeamDyn_def_transform = True)
 flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exported to BeamDyn files
+flag_OpenTurbine_transform = True
+flag_write_OpenTurbine = True
 
 # create flag dictionary
 flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref_axes_wt,
@@ -78,6 +80,8 @@ flags_dict['flag_DeamDyn_def_transform'] = flag_DeamDyn_def_transform
 flags_dict['flag_write_BeamDyn'] = flag_write_BeamDyn
 flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert
 flags_dict['viscoelastic'] = flag_viscoelastic
+flags_dict['flag_OpenTurbine_transform'] = flag_OpenTurbine_transform
+flags_dict['flag_write_OpenTurbine'] = flag_write_OpenTurbine
 
 # Flag for different load input formats.
 # Just used for example script, not passed to SONATA

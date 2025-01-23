@@ -64,8 +64,13 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
 
     """
     
-    if 'viscoelastic' not in flags_dict.keys():
-        flags_dict['viscoelastic'] = False
+    optional_keys = ['viscoelastic', 'flag_OpenTurbine_transform',
+                     'flag_write_OpenTurbine']
+    
+    for key in optional_keys:
+        if key not in flags_dict.keys():
+            flags_dict[key] = False
+        
 
     # --- ANBAX --- #
     # --------------------------------------- #
@@ -146,8 +151,12 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
                 anbax_beam_viscoelastic[i, k, :, :] = job.beam_properties[i, 1].TSv[k]
     
     # --------------------------------------- #
-    #  rotate anbax results from SONATA/VABS def to BeamDyn def coordinate system (for flag_DeamDyn_def_transform = True)
-    if flags_dict['flag_DeamDyn_def_transform']:
+    # rotate anbax results from SONATA/VABS def to BeamDyn def coordinate 
+    # system (for flag_DeamDyn_def_transform = True)
+    # OpenTurbine transform is from BeamDyn, so rotate in that case as well.
+    if flags_dict['flag_DeamDyn_def_transform'] \
+        or flags_dict['flag_OpenTurbine_transform']:
+            
         print('STATUS:\t Transform to BeamDyn coordinates')
         # B = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])  # transformation matrix
         B = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])  # transformation matrix
@@ -206,8 +215,44 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
                                        job.beam_properties[0][1].tau,
                                        anbax_beam_viscoelastic)
 
+    if flags_dict['flag_OpenTurbine_transform']:
+            
+        print('STATUS:\t Transform from BeamDyn to OpenTurbine coordinates')
+        T = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])  # transformation matrix
 
+        for n_sec in range(len(cs_pos)):
+            anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff[n_sec, :, :], T)
+            anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia[n_sec, :, :], T)
+            
+            if flags_dict['viscoelastic']:
+                for k in range(len(job.beam_properties[0][1].tau)):
+                    anbax_beam_viscoelastic[i, k, :, :] = trsf_sixbysix(
+                                        anbax_beam_viscoelastic[i, k, :, :], T)
+                    
+            
+        str_ext = '_OpenTurbine_def'
+        coordsys = 'OpenTurbine'
 
+        print('STATUS:\t Structural characteristics converted to OpenTurbine!')
+
+    if flags_dict['flag_write_OpenTurbine'] \
+        & flags_dict['flag_OpenTurbine_transform']:
+            
+        print('STATUS:\t Write OpenTurbine input files')
+
+        write_beamdyn_prop(folder_str, flags_dict, job.yml.get('name'),
+                           cs_pos, anbax_beam_stiff, anbax_beam_inertia, mu,
+                           format_name='OpenTurbine')
+    
+        if flags_dict['viscoelastic']:
+            
+            print('STATUS:\t Writing viscoelastic OpenTurbine input file.')
+            write_beamdyn_viscoelastic(folder_str, flags_dict,
+                                       job.yml.get('name'), cs_pos,
+                                       job.beam_properties[0][1].tau,
+                                       anbax_beam_viscoelastic,
+                                       format_name='OpenTurbine')
+            
 # ============================================= #
 def plot_beam_props_6by6(cs_pos, data, fig_title, save_path):
     # plots 6x6 matrix

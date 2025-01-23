@@ -189,11 +189,19 @@ def write_beamdyn_axis(folder, flags_dict, wt_name, ra, twist):
     return None
 
 # --- Write BeamDyn_Blade file with blade properties ---#
-def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations, beam_stiff, beam_inertia, mu):
+def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations,
+                       beam_stiff, beam_inertia, mu, format_name='BeamDyn'):
     n_pts = len(radial_stations)
 
     # file = open(folder + '00_analysis/analysis/' + wt_name + '_BeamDyn_Blade.dat', 'w')
-    file = open(os.path.join(folder , wt_name + '_BeamDyn_Blade.dat'), 'w')
+    file = open(os.path.join(folder , wt_name + '_' + format_name 
+                             + '_Blade.dat'), 'w')
+    
+    if not (format_name == 'BeamDyn'):
+        file.write(' ------- NOT A BeamDyn Input File. Format is: {:}'
+                   .format(format_name) + ' --------------------------\n')
+        
+    
     file.write(' ------- BEAMDYN V1.00.* INDIVIDUAL BLADE INPUT FILE --------------------------\n')
     file.write(' Test Format 1\n')
     file.write(' ---------------------- BLADE PARAMETERS --------------------------------------\n')
@@ -234,13 +242,20 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations, beam_stiff,
 
 # --- Write BeamDyn_Blade file with blade properties ---#
 def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
-                               time_scales, beam_viscoelastic):
+                               time_scales, beam_viscoelastic,
+                               format_name='BeamDyn'):
     n_pts = len(radial_stations)
 
-    output_name = os.path.join(folder , wt_name + '_BeamDyn_Blade_Viscoelastic.dat')
+    output_name = os.path.join(folder , wt_name + '_' + format_name
+                               + '_Blade_Viscoelastic.dat')
     
     # file = open(folder + '00_analysis/analysis/' + wt_name + '_BeamDyn_Blade.dat', 'w')
     file = open(output_name, 'w')
+    
+    if not (format_name == 'BeamDyn'):
+        file.write(' ------- NOT A BeamDyn Input File. Format is: {:}'
+                   .format(format_name) + ' --------------------------\n')
+        
     file.write(' ------- BEAMDYN V1.00.* INDIVIDUAL BLADE INPUT FILE --------------------------\n')
     file.write(' Test Format 1\n')
     file.write(' ---------------------- BLADE PARAMETERS --------------------------------------\n')
