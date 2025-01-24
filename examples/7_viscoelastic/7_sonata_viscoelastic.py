@@ -155,7 +155,7 @@ if job.materials[1].orth == 0:
     storage_mod = E_inf + (omega**2 * tau_i**2 * E_i)/(omega**2 * tau_i**2 + 1)
     loss_mod = (omega * tau_i * E_i)/(omega**2 * tau_i**2 + 1)
     tan_delta = loss_mod / storage_mod
-    zeta = tan_delta / (4 * np.pi)
+    zeta = tan_delta / (2.0)
     
     
     print('\nStorage Modulus at {:.3f} Hz: {:.3e}'.format(freq, storage_mod))
@@ -180,7 +180,7 @@ elif job.materials[1].orth == 1:
         storage_mod = E_inf + (omega**2 * tau_i**2 * E_i)/(omega**2 * tau_i**2 + 1)
         loss_mod = (omega * tau_i * E_i)/(omega**2 * tau_i**2 + 1)
         tan_delta = loss_mod / storage_mod
-        zeta = tan_delta / (4 * np.pi)
+        zeta = tan_delta / (2.0)
         
         
         print('\nFor property: {:s}'.format(prop_key))
