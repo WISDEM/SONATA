@@ -368,7 +368,14 @@ class CBM(object):
             (web.wr_nodes, web.wr_cells) = grab_nodes_of_cells_on_BSplineLst(self.SegmentLst[web.ID+1].cells, web.BSplineLst)
 
             if not web.wl_nodes or not web.wl_cells or not web.wr_nodes or not web.wr_cells:  # in case there was no mesh in a segment
-                print('STATUS:\t No mesh on Web Interface ' + str(web.ID) + ' to be consolodated')
+                print('STATUS:\t No mesh on Web Interface ' + str(web.ID) + ' to be consolodated.')
+
+                # This message gets printed in cases where the web doesn't get
+                # meshed because there is no isotropic layer.
+                # However, may also get printed in other cases.
+                # There are no other warnings printed about not having
+                # an isotropic core on webs.
+                print('STATUS:\t If web does not appear, ensure that webs have isotropic core layer.')
             else:
                 newcells = consolidate_mesh_on_web(web, web_consolidate_tol, self.display)
                 self.mesh.extend(newcells)
@@ -385,6 +392,70 @@ class CBM(object):
             if c.orientation == False:
                 c.invert_nodes()
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        return None
+
+    def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True):
+        """
+        Give a custom mesh to the section model.
+
+        Parameters
+        ----------
+        nodes : (N, 2) numpy.ndarray
+            Coordinates of each node. First column is x, second is y.
+        cells : (M, 4) numpy.ndarray
+            List of nodes for each element.
+            Element orientation is set based on the vector between nodes
+            indexed 1 and 2.
+        materials : length N list
+            Material for each cell.
+        split_quads : bool, optional
+            Flag for if quad elements should be split into triangles after
+            reading the custom mesh.
+
+        Returns
+        -------
+        None.
+        
+        Notes
+        -----
+        
+        Cannot currently set the ply orientation except by ordering the
+        cell nodes appropriately for the cell orientation.
+
+        """
+        
+        # Generate node list, do not need to explicitly save since each cell
+        # saves its own nodes.
+        node_list = nodes.shape[0] * [None]
+        
+        for ind in range(nodes.shape[0]):
+            
+            node_list[ind] = Node(gp_Pnt2d(nodes[ind, 0], nodes[ind, 1]),
+                                  ['Custom Layer', ind, 0])
+            
+        self.mesh = cells.shape[0] * [None]
+        
+        for ind in range(cells.shape[0]):
+            
+            c = Cell([node_list[nind] for nind in cells[ind]])
+            
+            if c.orientation == False:
+                c.invert_nodes()
+            
+            c.calc_theta_1()
+            c.theta_3 = 0.0 # not setting the ply orientation
+            c.MatID = int(materials[ind])
+            c.structured = True
+            
+            self.mesh[ind] = c
+        
+        if split_quads:
+            print("STATUS:\t Splitting Quads into Trias")
+            tmp = []
+            for c in self.mesh:
+                tmp.extend(c.split_quads())
+            self.mesh = tmp
+        
         return None
 
     def cbm_run_anbax(self):
