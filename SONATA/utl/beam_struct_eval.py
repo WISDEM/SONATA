@@ -13,6 +13,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import csv
 import os
+from scipy.interpolate import PchipInterpolator
 
 from SONATA.cbm.cbm_utl import trsf_sixbysix
 from SONATA.utl_openfast.utl_sonata2beamdyn import convert_structdef_SONATA_to_beamdyn, \
@@ -65,7 +66,7 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
     """
     
     optional_keys = ['viscoelastic', 'flag_OpenTurbine_transform',
-                     'flag_write_OpenTurbine']
+                     'flag_write_OpenTurbine', 'flag_output_zero_twist']
     
     for key in optional_keys:
         if key not in flags_dict.keys():
@@ -167,8 +168,8 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
             
             if flags_dict['viscoelastic']:
                 for k in range(len(job.beam_properties[0][1].tau)):
-                    anbax_beam_viscoelastic[i, k, :, :] = trsf_sixbysix(
-                                        anbax_beam_viscoelastic[i, k, :, :], T)
+                    anbax_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
+                                        anbax_beam_viscoelastic[n_sec, k, :, :], T)
                     
             
         str_ext = '_BeamDyn_def'
@@ -200,7 +201,50 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
     # ToDo: also export BeamDyn files for results from anbax as soon as the verification is completed
     # --------------------------------------- #
     # write BeamDyn input files
-    np.savetxt('anbax_BAR00.txt', np.array([cs_pos, anbax_beam_stiff[:, 3, 3], anbax_beam_stiff[:, 4, 4], anbax_beam_stiff[:, 5, 5], anbax_beam_stiff[:, 2, 2], anbax_beam_inertia[:, 0, 0]]).T)
+    np.savetxt('anbax_BAR00.txt', np.array([cs_pos, anbax_beam_stiff[:, 3, 3],
+                                            anbax_beam_stiff[:, 4, 4],
+                                            anbax_beam_stiff[:, 5, 5],
+                                            anbax_beam_stiff[:, 2, 2],
+                                            anbax_beam_inertia[:, 0, 0]]).T)
+
+    if flags_dict['flag_DeamDyn_def_transform'] \
+        and flags_dict['flag_output_zero_twist']:
+
+        print('Rotating 6x6 matrices through twist here so that BeamDyn does'
+              + ' not need to rotate them.')
+
+        twist_interp = PchipInterpolator(job.twist[:, 0], job.twist[:, 1])
+
+        # for ind, curr_twist in enumerate(job.twist):
+        for n_sec in range(len(cs_pos)):
+
+            # Twist at current section.
+            # The goal here is to cause a rotation around the positive z-axis
+            # of value twist in the BeamDyn coordinate system to transform from
+            # the coordinates along the chord to the global coordinates.
+            # This is done by creating a rotation matrix with the angle twist
+            # and applying that matrix as R @ M @ R.T. However,
+            # trsf_sixbysix applies the rotation as R.T @ M @ R.
+            # Thus need to pass the negative twist for calculating the rotation
+            # matrix.
+            alpha = -twist_interp(job.beam_properties[n_sec][0])
+
+            rot_mat = np.array([[np.cos(alpha), np.sin(alpha), 0],
+                                [-np.sin(alpha), np.cos(alpha), 0],
+                                [0, 0, 1]])
+
+            anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff[n_sec, :, :], rot_mat)
+            anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia[n_sec, :, :], rot_mat)
+
+            if flags_dict['viscoelastic']:
+                for k in range(len(job.beam_properties[0][1].tau)):
+                    anbax_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
+                        anbax_beam_viscoelastic[n_sec, k, :, :], T)
+
+        print('Setting twist to zero now that 6x6 are rotated.')
+        job.twist[:, 1] = np.zeros_like(job.twist[:, 1])
+
+
     if flags_dict['flag_write_BeamDyn'] & flags_dict['flag_DeamDyn_def_transform']:
         print('STATUS:\t Write BeamDyn input files')
         refine = int(30/len(cs_pos))  # initiate node refinement parameter
@@ -218,7 +262,8 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
     if flags_dict['flag_OpenTurbine_transform']:
             
         print('STATUS:\t Transform from BeamDyn to OpenTurbine coordinates')
-        T = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])  # transformation matrix
+        # transformation matrix
+        T = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
 
         for n_sec in range(len(cs_pos)):
             anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff[n_sec, :, :], T)
@@ -226,8 +271,8 @@ def beam_struct_eval(flags_dict, loads_dict, cs_pos, job, folder_str, job_str, m
             
             if flags_dict['viscoelastic']:
                 for k in range(len(job.beam_properties[0][1].tau)):
-                    anbax_beam_viscoelastic[i, k, :, :] = trsf_sixbysix(
-                                        anbax_beam_viscoelastic[i, k, :, :], T)
+                    anbax_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
+                                        anbax_beam_viscoelastic[n_sec, k, :, :], T)
                     
             
         str_ext = '_OpenTurbine_def'

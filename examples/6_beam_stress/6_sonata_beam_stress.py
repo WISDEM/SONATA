@@ -42,6 +42,9 @@ flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exporte
 # Shape of corners
 choose_cutoff = 2    # 0 step, 2 round
 
+# Flag applies twist rotations in SONATA before output and then sets the output
+# twist to all be zero degrees.
+flag_output_zero_twist = False
 
 
 # create flag dictionary
@@ -79,6 +82,7 @@ flags_dict['flag_csv_export'] = flag_csv_export
 flags_dict['flag_DeamDyn_def_transform'] = flag_DeamDyn_def_transform
 flags_dict['flag_write_BeamDyn'] = flag_write_BeamDyn
 flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert
+flags_dict['flag_output_zero_twist'] = flag_output_zero_twist
 
 # Flag for different load input formats.
 # Just used for example script, not passed to SONATA
