@@ -138,6 +138,10 @@ if flag_3d:
 
 assert len(job.materials) == 1, 'Following calculations assume single material.'
 
+
+assert job.materials[1].viscoelastic['time_scales_v'].shape[0] == 2,\
+    'Following calculations assume single viscoelastic decaying time scale.'
+
 # Frequency to evaluate viscoelastic properties at. 
 # If checking a modal damping factor, this should be that mode's natural freq.
 # Note this needs to be the actual response frequency and that the viscoelastic
