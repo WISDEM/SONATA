@@ -13,7 +13,8 @@ from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
 from SONATA.cbm.mesh.cell import Cell
 from SONATA.cbm.mesh.node import Node
 from SONATA.cbm.topo.BSplineLst_utils import (
-    ProjectPointOnBSplineLst, find_BSplineLst_coordinate, intersect_BSplineLst_with_BSpline,)
+    ProjectPointOnBSplineLst, find_BSplineLst_coordinate,
+    intersect_BSplineLst_with_BSpline,discretize_BSplineLst)
 from SONATA.cbm.topo.utils import point2d_list_to_TColgp_Array1OfPnt2d
 
 def display_bsplinelst(bsplinelst, color = 'red'):
@@ -73,7 +74,10 @@ def three_pnt_projection_method(points, bspline, min_dist):
             return [intersection_point, distance, True]
     return [None, None, False]
 
-def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, layer_thickness, tol=1e-2, crit_angle=95, LayerID=0, refL=1.0, **kw):
+def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst,
+                                           layer_thickness, tol=1e-2,
+                                           crit_angle=95, LayerID=0, refL=1.0,
+                                           **kw):
     """
     *function to mesh the SONATA topologies by projecting nodes onto the 
     generated BSplineLists.   
@@ -150,16 +154,33 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                     projected = True
                 else:
                     None
+
         # If no node is found that creates a vector perpendicular to the target Bspline, a different
         # projection method is tried using the current node and the neighboring nodes to create a
         # bisecting vector. The point at which the bisecting vector intersects the target Bspline
         # is where the projected point is placed. This helps for projecting nodes on corners.
-        if not projected and i-1 != 0 and not i-1 > len(prj_nodes)-2:
+        if not projected and (closed_a or (i-1 != 0 and i-1 <= len(prj_nodes)-2)):
+            # Requirements: not projected by previous method
+            # Section must be closed or need to have a point on both sides
             min_distance = np.inf
             for idx, item in enumerate(b_BSplineLst):
-                prev_point = np.array([prj_nodes[i-2].coordinates[0], prj_nodes[i-2].coordinates[1]])
+
+                # If section is not closed, then only get here if i-2 >= 0
+                # if section is closed i-2 can be -1, which is the correct
+                # wrap around.
+                prev_point = np.array([prj_nodes[i-2].coordinates[0],
+                                           prj_nodes[i-2].coordinates[1]])
+
                 curr_point = np.array([prj_nodes[i-1].coordinates[0], prj_nodes[i-1].coordinates[1]])
-                next_point = np.array([prj_nodes[i].coordinates[0], prj_nodes[i].coordinates[1]])
+
+                if closed_a and i-1 > len(prj_nodes)-2:
+                    # Since section is closed wrap around the index
+                    next_point = np.array([prj_nodes[0].coordinates[0],
+                                           prj_nodes[0].coordinates[1]])
+                else:
+                    next_point = np.array([prj_nodes[i].coordinates[0],
+                                           prj_nodes[i].coordinates[1]])
+
                 [tmp_projected_point, tmp_min_distance, projected] = three_pnt_projection_method([prev_point,curr_point,next_point], item, min_distance)
                 if projected:
                     projected_point = tmp_projected_point
@@ -171,6 +192,42 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                 pPara.append(node.parameters[2])
                 pIdx.append(tmp_idx)
                 node.corner = False
+
+        elif not projected and not closed_a:
+            print("WARNING: Doing discrete nearest point for projection."
+                  + " First or last point failed to project.")
+            # It is better to do this than just skip the projected node
+            # from looking at a few cases.
+
+            discrete_pts = len(b_BSplineLst) * [None]
+            discrete_pts_dist = len(b_BSplineLst) * [None]
+
+            for idx, item in enumerate(b_BSplineLst):
+                discrete_curve = discretize_BSplineLst([item], 1.0e-7*refL)
+
+                discrete_dist = np.sum((discrete_curve
+                                - np.array([Pnt2d.X(), Pnt2d.Y()]))**2, axis=1)
+
+                proj_idx = np.argmin(discrete_dist)
+
+                discrete_pts_dist[idx] = discrete_dist[proj_idx]
+
+                discrete_pts[idx] = (discrete_curve[proj_idx, 0],
+                                     discrete_curve[proj_idx, 1])
+
+            # Figure out which spline is the closest projection
+            idx = np.argmin(discrete_pts_dist)
+
+            # Save all of the projection information
+            projected_point = gp_Pnt2d(discrete_pts[idx][0],
+                                       discrete_pts[idx][1])
+
+            min_distance = discrete_pts_dist[idx]
+
+            pPnts.append(projected_point)
+            pPara.append(node.parameters[2])
+            pIdx.append(idx)
+            node.corner = False
 
 
         # ==================making sure the pPnts are unique:
@@ -393,6 +450,19 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
                     b_nodes[-1].corner = True
                     b_nodes.append(Node(pPnts[0], [LayerID, pIdx[0], pPara[0]]))
 
+            elif len(exterior_corners) == 2 and node.corner == False:
+
+                print("WARNING: Two exterior corners found but node is not seen as a corner.")
+                print("Projection is not included, try increasing crit_angle.")
+                # This case results in one two few b_nodes being added for open
+                # sections and likely a mesh warning later on.
+                # 1. Instead of increasing crit_angle, one could re-evaluate if
+                # 'aglTol' is appropriate.
+                # 2. Or instead one could adopt a different approach here.
+                #
+                # If increasing crit_angle, change the default under
+                # SONATA/cbm/topo/layer/def mesh_layer
+
             # ===CORNERSTYLE 5======
             elif len(exterior_corners) > 2 and node.corner == True:
                 node.cornerstyle = 5
@@ -513,7 +583,6 @@ def mesh_by_projecting_nodes_on_BSplineLst(a_BSplineLst, a_nodes, b_BSplineLst, 
 
         except (IndexError):
             print("ERROR:\t IndexError: list index out of range", a_nodes[a])
-            pass
 
         b += 1
 

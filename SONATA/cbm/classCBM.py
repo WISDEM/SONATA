@@ -9,6 +9,8 @@ https://numpydoc.readthedocs.io/en/latest/format.html
 # Core Library modules
 import copy
 import math
+from collections import OrderedDict
+
 # Basic PYTHON Modules:
 import pickle as pkl
 from datetime import datetime
@@ -38,6 +40,7 @@ from SONATA.vabs.classStress import Stress
 from SONATA.cbm.topo.projection import (
     chop_interval_from_layup, sort_layup_projection,)
 # from SONATA.vabs.classVABSConfig import VABSConfig
+from SONATA.classMaterial import IsotropicMaterial, OrthotropicMaterial
 
 from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
 from OCC.Core.gp import gp_Pnt2d
@@ -365,7 +368,14 @@ class CBM(object):
             (web.wr_nodes, web.wr_cells) = grab_nodes_of_cells_on_BSplineLst(self.SegmentLst[web.ID+1].cells, web.BSplineLst)
 
             if not web.wl_nodes or not web.wl_cells or not web.wr_nodes or not web.wr_cells:  # in case there was no mesh in a segment
-                print('STATUS:\t No mesh on Web Interface ' + str(web.ID) + ' to be consolodated')
+                print('STATUS:\t No mesh on Web Interface ' + str(web.ID) + ' to be consolodated.')
+
+                # This message gets printed in cases where the web doesn't get
+                # meshed because there is no isotropic layer.
+                # However, may also get printed in other cases.
+                # There are no other warnings printed about not having
+                # an isotropic core on webs.
+                print('STATUS:\t If web does not appear, ensure that webs have isotropic core layer.')
             else:
                 newcells = consolidate_mesh_on_web(web, web_consolidate_tol, self.display)
                 self.mesh.extend(newcells)
@@ -382,6 +392,70 @@ class CBM(object):
             if c.orientation == False:
                 c.invert_nodes()
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        return None
+
+    def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True):
+        """
+        Give a custom mesh to the section model.
+
+        Parameters
+        ----------
+        nodes : (N, 2) numpy.ndarray
+            Coordinates of each node. First column is x, second is y.
+        cells : (M, 4) numpy.ndarray
+            List of nodes for each element.
+            Element orientation is set based on the vector between nodes
+            indexed 1 and 2.
+        materials : length N list
+            Material for each cell.
+        split_quads : bool, optional
+            Flag for if quad elements should be split into triangles after
+            reading the custom mesh.
+
+        Returns
+        -------
+        None.
+        
+        Notes
+        -----
+        
+        Cannot currently set the ply orientation except by ordering the
+        cell nodes appropriately for the cell orientation.
+
+        """
+        
+        # Generate node list, do not need to explicitly save since each cell
+        # saves its own nodes.
+        node_list = nodes.shape[0] * [None]
+        
+        for ind in range(nodes.shape[0]):
+            
+            node_list[ind] = Node(gp_Pnt2d(nodes[ind, 0], nodes[ind, 1]),
+                                  ['Custom Layer', ind, 0])
+            
+        self.mesh = cells.shape[0] * [None]
+        
+        for ind in range(cells.shape[0]):
+            
+            c = Cell([node_list[nind] for nind in cells[ind]])
+            
+            if c.orientation == False:
+                c.invert_nodes()
+            
+            c.calc_theta_1()
+            c.theta_3 = 0.0 # not setting the ply orientation
+            c.MatID = int(materials[ind])
+            c.structured = True
+            
+            self.mesh[ind] = c
+        
+        if split_quads:
+            print("STATUS:\t Splitting Quads into Trias")
+            tmp = []
+            for c in self.mesh:
+                tmp.extend(c.split_quads())
+            self.mesh = tmp
+        
         return None
 
     def cbm_run_anbax(self):
@@ -413,7 +487,7 @@ class CBM(object):
         except:
             print('\n')
             print('==========================================\n\n')
-            print('Error, Anba4 wrapper called, but ')
+            print('Error, Anba4 wrapper called, likely ')
             print('Anba4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
 
@@ -453,6 +527,254 @@ class CBM(object):
 
 
         return
+
+
+    def cbm_run_viscoelastic(self, test_elastic=True, test_tau0=True):
+        """
+        Calculation of viscoelastic 6x6 matrices at the section.
+
+        Returns
+        -------
+        None.
+
+        """
+
+        self.mesh, nodes = sort_and_reassignID(self.mesh)
+
+        try:
+            (mesh, matLibrary, materials, plane_orientations,
+             fiber_orientations, maxE) = build_dolfin_mesh(self.mesh,
+                                                       nodes, self.materials)
+        except:
+            print('\n')
+            print('==========================================\n\n')
+            print('Error, Anba4 wrapper called, likely ')
+            print('Anba4 _or_ Dolfin are not installed\n\n')
+            print('==========================================\n\n')
+
+
+        # Call ANBAX with baseline properties
+        anba = anbax(mesh, 1, matLibrary, materials, plane_orientations,
+                     fiber_orientations, maxE)
+        
+        tmp_TS = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
+        tmp_MM = anba.inertia().getValues(range(6),range(6))    # get mass matrix
+
+        # Define transformation T (from ANBA to SONATA/VABS coordinates)
+        B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
+        T = np.dot(np.identity(3), np.linalg.inv(B))
+
+        self.BeamProperties = BeamSectionalProps()
+        self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
+        self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
+
+        # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
+        self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
+        self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+
+        # Recover the mapping from sectional Forces and Moments to Strain
+        # in a non-invasive way from ANBA
+        
+        # 1. Initialize memory on each element to store the mapping
+        # ASSIGN stresses and strains to mesh elements:
+        for i,c in enumerate(self.mesh):
+            
+            c.fm_to_strain = np.zeros((6,6))
+        
+        # 2. Call ANBA looping over unit forces/moments
+        for i in range(6):
+            
+            F = [0.0, 0.0, 0.0]
+            M = [0.0, 0.0, 0.0]
+            
+            if i < 3:
+                F[i] = 1.0
+            else:
+                M[i - 3] = 1.0
+            
+            # This ends up being potentially excessively slow since
+            # it does a new calculation for each stress and strain field (4),
+            # but only need the global coordinate strain field.
+            [tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran] = \
+                anbax_recovery(anba, len(self.mesh), F, M,
+                               self.config.anbax_cfg.voigt_convention, T)
+        
+        
+            # 3. Store Strain results in each case / element
+            for j,c in enumerate(self.mesh):
+            
+                # This creates a Strain class object that clearly identifies
+                # elasticity strain tensor components (epsilon) versus
+                # engineering shear strain components (gamma).
+                # While is is probably unneccesary for computation, it is done for
+                # code clarity.
+                curr_strain = Strain([tmp_StrainF_tran[j,0,0],
+                                      tmp_StrainF_tran[j,0,1],
+                                      tmp_StrainF_tran[j,0,2],
+                                      tmp_StrainF_tran[j,1,1],
+                                      tmp_StrainF_tran[j,1,2],
+                                      tmp_StrainF_tran[j,2,2]])
+
+                c.fm_to_strain[:, i] = np.array([curr_strain.epsilon11,
+                                                 curr_strain.epsilon22,
+                                                 curr_strain.epsilon33,
+                                                 curr_strain.gamma23,
+                                                 curr_strain.gamma13,
+                                                 curr_strain.gamma12])
+
+        # 4. Create a material dictionary for each time scale.
+        #    The will loop over those time scales
+        time_scale_list = []
+        
+        for MatID in self.materials:
+            time_scale_list += self.materials[MatID]\
+                                    .viscoelastic['time_scales_v'].tolist()
+        
+        time_scale_list = np.sort(np.unique(time_scale_list)).tolist()
+        
+        time_scale_mat_dicts = len(time_scale_list) * [None]
+        
+        # breakpoint()
+        
+        for i, tau in enumerate(time_scale_list):
+            
+            curr_materials = OrderedDict()
+            
+            for MatID in self.materials:
+                
+                mat = self.materials[MatID]
+                
+                if hasattr(mat, 'viscoelastic'):
+                    found_time_scale = tau in mat.viscoelastic['time_scales_v'].tolist()
+                else:
+                    found_time_scale = False
+                
+                if not found_time_scale:
+                    # Set material as isotropic with no stiffness
+                    # nu value is irrelevant since E=0.0
+                    curr_dict = {'nu' : 0.0,
+                                 'E'  : 0.0}
+                    
+                    curr_materials[MatID] = IsotropicMaterial(ID=MatID,
+                                                                **curr_dict)
+                else:
+                    # find index of time scale
+                    time_scale_ind = np.argmax(tau 
+                                          == mat.viscoelastic['time_scales_v'])
+                
+                if found_time_scale and mat.orth == 0:
+                    
+                    curr_dict = {'E' : mat.viscoelastic['E_v'][time_scale_ind],
+                                 'nu' : mat.nu,
+                                 'name' : mat.name + ' time scale : {}'.format(tau)}
+
+                    curr_materials[MatID] = IsotropicMaterial(ID=MatID,
+                                                                **curr_dict)
+                elif found_time_scale and mat.orth == 1:
+                    
+                    curr_dict = {'E_1' : mat.viscoelastic['E_1_v'][time_scale_ind],
+                                 'E_2' : mat.viscoelastic['E_2_v'][time_scale_ind],
+                                 'E_3' : mat.viscoelastic['E_3_v'][time_scale_ind],
+                                 'G_12' : mat.viscoelastic['G_12_v'][time_scale_ind],
+                                 'G_13' : mat.viscoelastic['G_13_v'][time_scale_ind],
+                                 'G_23' : mat.viscoelastic['G_23_v'][time_scale_ind],
+                                 'nu' : mat.nu.tolist(),
+                                 'name' : mat.name + ' time scale : {}'.format(tau)}
+
+                    curr_materials[MatID] = OrthotropicMaterial(ID=MatID,
+                                                                flag_mat=False,
+                                                                **curr_dict)
+            time_scale_mat_dicts[i] = curr_materials
+
+        # 5. calculate integrated element contributions
+        # This mapping is just the partial product that maps force/moments
+        # back to forces/moments (or time derivatives to be integrated)
+        
+        viscoelastic_6x6 = len(time_scale_list) * [None]
+        
+        for tau_ind, tau in enumerate(time_scale_list):
+            
+            material_dict = time_scale_mat_dicts[tau_ind]
+            
+            force_to_forcedot = np.zeros((6,6))
+    
+            ze = np.zeros((6,6))
+            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+            ze[2, 0] = 1.0 # axial stress -> axial force
+    
+            for i,c in enumerate(self.mesh):
+    
+                cxy = c.center
+    
+                ze[3, 0] = cxy[1] # axial stress -> moment around x
+                ze[4, 0] = -cxy[0] # axial stress -> moment around y
+    
+                ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+                ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+    
+                De = material_dict[c.MatID].rotated_constitutive_tensor(
+                                                    c.theta_1[0], c.theta_3)
+    
+                force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+                
+                
+            viscoelastic_6x6[tau_ind] = trsf_sixbysix(force_to_forcedot @ tmp_TS, T)
+
+        if test_elastic:
+            
+            force_to_forcedot = np.zeros((6,6))
+    
+            ze = np.zeros((6,6))
+            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+            ze[2, 0] = 1.0 # axial stress -> axial force
+    
+            for i,c in enumerate(self.mesh):
+    
+                cxy = c.center
+    
+                ze[3, 0] = cxy[1] # axial stress -> moment around x
+                ze[4, 0] = -cxy[0] # axial stress -> moment around y
+    
+                ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+                ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+    
+                De = self.materials[c.MatID].rotated_constitutive_tensor(
+                                                         c.theta_1[0], c.theta_3)
+    
+                force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+            
+            error = np.linalg.norm(force_to_forcedot - np.eye(6))
+            
+            print('Error in recovering elastic 6x6 with mappings is: {:.3e}'
+                  .format(error))
+
+        if test_tau0:
+            # Test that all of the viscoelastic matrices add up to the 
+            # default calculated matrix
+            
+            sum_6x6 = np.zeros((6,6))
+            
+            for mat6x6 in viscoelastic_6x6:
+                sum_6x6 += mat6x6
+            
+            error = np.linalg.norm(self.BeamProperties.TS - sum_6x6)
+            
+            mag = np.linalg.norm(self.BeamProperties.TS)
+            
+            print('Adding all time scale 6x6 v. baseline error: '
+                  + 'absolute: {:.3e}, relative: {:.3e}'
+                  .format(error, error/mag))
+            
+            print('This error should be small if the (sum of the elastic'
+                  + ' modulus and shear modulus at all time scales) equals'
+                  + ' the reference elastic and shear moduli.')
+
+        self.BeamProperties.TSv = viscoelastic_6x6
+        self.BeamProperties.tau = time_scale_list
+        
+        return viscoelastic_6x6
 
     def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):
         """ 

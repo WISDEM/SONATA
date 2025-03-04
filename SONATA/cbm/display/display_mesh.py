@@ -55,11 +55,12 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         cmap_name, colors, N=6)
         
     elif data_name == 'MatID':
-        cmap = a=plt.cm.get_cmap()
+        cmap = plt.cm.get_cmap()
         # extract all colors from the .jet map
         cmaplist = [cmap(i) for i in range(cmap.N)]
         cmap = LinearSegmentedColormap.from_list('Custom cmap', cmaplist, max(data))
         
+        cmap = cm.get_cmap('tab20',max(data))
     else:
         cmap = plt.cm.get_cmap()
 
@@ -72,9 +73,6 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         vmax = kw["vmax"]
     else:
         vmax = None
-    from palettable.cartocolors.qualitative import Prism_9
-    from matplotlib.colors import ListedColormap
-    cmap = cm.get_cmap('tab20',max(data))
 
     fig, ax = plt.subplots(1,1,figsize=(7.5, 6))
     patches = []
@@ -95,7 +93,7 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
     p.set_clim(vmin, vmax)
     _ = ax.add_collection(p)
 
-    cbar = fig.colorbar(p, ax=ax, drawedges=True)
+    cbar = fig.colorbar(p, ax=ax, drawedges=(data_name == 'MatID'))
     cbar.ax.set_ylabel(data_name)
 
     if data_name == "MatID":
@@ -138,26 +136,26 @@ def plot_mesh(nodes, elements, theta_11, data, data_name, materials, title=None,
         for i, item in enumerate(nodes):
             ax.annotate(i + 1, (item[0], item[1]), color="red")
 
-    # if VABSProperties != None:
-    #     pass
-    #     (CG,) = plt.plot(VABSProperties.Xm[0], VABSProperties.Xm[1], "ro", label="CG: Mass Center")
-    #     # ax.annotate('CG', (VABSProperties.Xm2,VABSProperties.Xm3),fontsize=20)
-    #     (NA,) = plt.plot(VABSProperties.Xt[0], VABSProperties.Xt[1], "gs", label="NA: Neutral Axes")
-    #     # ax.annotate('NA', (VABSProperties.Xt2,VABSProperties.Xt3),fontsize=20)
-    #     try:
-    #         (GC,) = plt.plot(VABSProperties.Xg[0], VABSProperties.Xg[1], "b^", label="GC: Geometric Center")
-    #         # ax.annotate('GC', (VABSProperties.Xg2,VABSProperties.Xg3),fontsize=20)
-    #         plt.legend(handles=[CG, GC, NA])
-    #     except:
-    #         plt.legend(handles=[CG, NA])
+    if VABSProperties != None:
+        pass
+        (CG,) = plt.plot(VABSProperties.Xm[0], VABSProperties.Xm[1], "ro", label="CG: Mass Center")
+        # ax.annotate('CG', (VABSProperties.Xm2,VABSProperties.Xm3),fontsize=20)
+        (NA,) = plt.plot(VABSProperties.Xt[0], VABSProperties.Xt[1], "gs", label="NA: Neutral Axes")
+        # ax.annotate('NA', (VABSProperties.Xt2,VABSProperties.Xt3),fontsize=20)
+        try:
+            (GC,) = plt.plot(VABSProperties.Xg[0], VABSProperties.Xg[1], "b^", label="GC: Geometric Center")
+            # ax.annotate('GC', (VABSProperties.Xg2,VABSProperties.Xg3),fontsize=20)
+            plt.legend(handles=[CG, GC, NA])
+        except:
+            plt.legend(handles=[CG, NA])
 
-    #     if isinstance(VABSProperties.Xs, np.ndarray):
-    #         (SC,) = plt.plot(VABSProperties.Xs[0], VABSProperties.Xs[1], "kD", label="SC: Generalized Shear Center")
-    #         # ax.annotate('SC', (VABSProperties.Xs2,VABSProperties.Xs3),fontsize=20)
-    #         try:
-    #             plt.legend(handles=[CG, GC, NA, SC])
-    #         except:
-    #             plt.legend(handles=[CG, NA, SC])
+        if isinstance(VABSProperties.Xs, np.ndarray):
+            (SC,) = plt.plot(VABSProperties.Xs[0], VABSProperties.Xs[1], "kD", label="SC: Generalized Shear Center")
+            # ax.annotate('SC', (VABSProperties.Xs2,VABSProperties.Xs3),fontsize=20)
+            try:
+                plt.legend(handles=[CG, GC, NA, SC])
+            except:
+                plt.legend(handles=[CG, NA, SC])
 
     if invert_xaxis:
         ax.invert_xaxis()

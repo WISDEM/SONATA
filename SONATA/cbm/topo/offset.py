@@ -61,8 +61,17 @@ def combine_close_points(points, tolerance, length_threshold):
             segment_len = segment_length(i, j-1)
             if segment_len < length_threshold and segment_len > 3 * tolerance:
                 # Keep the middle point if the length is less than the threshold
+                # Cannot just keep middle point if that would eliminate the
+                # first or last point because that causes the start/end of
+                # the section to move and may cause the segement to no longer
+                # close
+                if i == 0:
+                    combined_points.append(points[0])
                 middle_index = len(close_points) // 2
                 combined_points.append(close_points[middle_index])
+                if j == len(points):
+                    # last point is j-1 by the while loop
+                    combined_points.append(points[-1])
             else:
                 # Keep all points if the length is greater than or equal to the threshold
                 combined_points.extend(close_points)

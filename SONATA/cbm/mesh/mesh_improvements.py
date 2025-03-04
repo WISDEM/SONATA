@@ -49,7 +49,12 @@ def modify_sharp_corners(cells, b_BSplineLst, global_minLen, layer_thickness, La
                     FrontNodes = []
                     BackNodes = []
                     distance = (1 + tol) * layer_thickness
-                    for n in MiddleNodes:
+
+                    # Node indices of Middle nodes that fail to project and
+                    # identify front/back.
+                    rm_MiddleNodes = []
+
+                    for mid_idx, n in enumerate(MiddleNodes):
                         pPnts = []
                         pPara = []
                         pIdx = []
@@ -83,11 +88,45 @@ def modify_sharp_corners(cells, b_BSplineLst, global_minLen, layer_thickness, La
                                 BackNodes.append(Node(P, [LayerID, pIdx[i], pPara[i]]))
 
                             else:
-                                print("ERROR: cannot determine FRONT and BACK nodes @ ", c.nodes[0], "because vnp and v01 are orthogonal")
-                                print(pPara)
+                                # This need not be a complete error if other
+                                # Middle nodes have worked.
+                                print("WARNING: cannot determine FRONT and ",
+                                      "BACK nodes @ ",
+                                      c.nodes[0],
+                                      ", so not using this point for sharp ",
+                                      "corner improvement.")
+
+                                rm_MiddleNodes.append(mid_idx)
+
+                        # Make sure 'FrontNodes' and 'BackNodes' are the same
+                        # length and fix.
+                        # This fix is needed in case the front or back projection
+                        # worked, but the other did not. In that case,
+                        # rm_MiddleNodes should have this index.
+                        if mid_idx in rm_MiddleNodes:
+
+                            num_proj = min(len(FrontNodes), len(BackNodes))
+
+                            if len(FrontNodes) - num_proj > 2\
+                                or len(BackNodes) - num_proj > 2:
+                                # Checking every for loop iteration, so these
+                                # lists should not get off by a length of more
+                                # than 1.
+                                print("ERROR: Fixing shaper elements failed @ ", c.nodes[0])
                                 MiddleNodes = []
                                 FrontNodes = []
                                 BackNodes = []
+                            else:
+                                FrontNodes = FrontNodes[:num_proj]
+                                BackNodes = BackNodes[:num_proj]
+
+                    # Remove MiddleNodes that have indices in 'rm_MiddleNodes'
+                    MiddleNodes = [node for k, node in enumerate(MiddleNodes)
+                                   if k not in rm_MiddleNodes]
+
+                    if len(MiddleNodes) == 0 and len(rm_MiddleNodes) > 0:
+                        print("ERROR: All refinements failed for sharp corner @ ",
+                              c.nodes[0], "because vnp and v01 are orthogonal")
 
                     # =====================CREATE FRONT CELLS
                     FrontCellLst = []
@@ -123,8 +162,9 @@ def modify_sharp_corners(cells, b_BSplineLst, global_minLen, layer_thickness, La
                         enhanced_cells.extend(FrontCellLst)
                         enhanced_cells.extend(reversed(BackCellLst))
 
-                        if len(MiddleNodes) == 0:
-                            enhanced_cells.append(c)
+                    if len(MiddleNodes) == 0:
+                        # No refinement found, keep old cell.
+                        enhanced_cells.append(c)
                 else:
                     enhanced_cells.append(c)
 

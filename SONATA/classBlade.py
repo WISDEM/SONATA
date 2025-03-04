@@ -504,6 +504,49 @@ class Blade(Component):
                 cs.cbm_gen_mesh(**kwargs)
         return None
 
+    def blade_custom_mesh(self, nodes, cells, materials, split_quads=True):
+        """
+        Give a custom mesh to the blade model.
+
+        Parameters
+        ----------
+        nodes : (N, 2) numpy.ndarray
+            Coordinates of each node. First column is x, second is y.
+        cells : (M, 4) numpy.ndarray
+            List of nodes for each element.
+            Element orientation is set based on the vector between nodes
+            indexed 1 and 2.
+        materials : length N list
+            Material for each cell.
+        split_quads : bool, optional
+            Flag for if quad elements should be split into triangles after
+            reading the custom mesh.
+
+        Returns
+        -------
+        None.
+        
+        Notes
+        -----
+        
+        Each blade section gets asigned the same mesh for now.
+        
+        Still requires reading a yaml file first for materials information.
+        
+        Assumes mesh passed in is structured to set material orientation.
+        
+        
+        Cannot currently set the ply orientation except by ordering the
+        cell nodes appropriately for the cell orientation.
+
+        """
+        
+        for (x, cs) in self.sections:
+            cs.cbm_custom_mesh(nodes, cells, materials,
+                               split_quads=split_quads)
+        
+        return None
+
     def blade_run_anbax(self, loads=None, **kwargs):
         """
         runs anbax for every section
@@ -533,8 +576,31 @@ class Blade(Component):
         # self.anba_beam_properties = np.asarray(lst)
         self.beam_properties = np.asarray(lst)
         return None      
-        
-        
+
+    def blade_run_viscoelastic(self, **kwargs):
+        """
+        Runs anbax for every section to evaluate viscoelastic 6x6 matrices.
+
+        """
+
+        print('Running viscoelastic analysis. This requires calling ANBAX'
+              + ' multiple times per section.')
+
+        ac = ANBAXConfig()
+        lst = []
+        for (x, cs) in self.sections:
+
+            cs.config.anbax_cfg = ac
+
+            print("STATUS:\t Running Viscoelastic Analysis at grid location %s" % (x))
+            cs.cbm_run_viscoelastic(**kwargs)
+            lst.append([x, cs.BeamProperties])
+
+        # self.anba_beam_properties = np.asarray(lst)
+        self.beam_properties = np.asarray(lst)
+
+        return None
+
      
     def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0, solver='vabs', filename = None):
         """
@@ -793,9 +859,6 @@ class Blade(Component):
         arr = np.asarray(lst)
 
         return arr
-
-
-
 
 
 

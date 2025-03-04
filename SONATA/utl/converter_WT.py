@@ -65,7 +65,33 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     cbmconfigs : np.array
         returns a numpy array with grid location and CBMconfig instances
         np.array([[grid, CBMconfig]])
-    
+
+    Notes
+    -----
+
+    Precedence of keys:
+        1. `start_nd_arc` and `end_nd_arc` will be used as
+            provided if provided.
+        2. If `width` is provided with one of `start_nd_arc` or `end_nd_arc`,
+            then the `width` will be used to set the other value.
+        3. If `width` is defined with neither `start_nd_arc` or `end_nd_arc`,
+            and `midpoint_nd_arc` is provided, then those two values will be
+            used.
+        4. Other cases are not implemented so will use the default values
+            for `start_nd_arc` (0) and `end_nd_arc` (1).
+
+    `midpoint_nd_arc` can be defined with values on a grid or with
+    `fixed : LE` or `fixed : TE` for the leading and trailing edges
+    respectively.
+
+    At all stations, shear webs are sorted into a list by
+    ['start_nd_arc']['values'][0]. Material cannot be placed on the second
+    web without also placing material on the first web or an indexing error
+    will occur. If shear webs do not start at 0 span, define an extra grid
+    point at zero span to obtain the correct sorting.
+
+    Layers around the shear web have a default flange of 0.01
+    normalized arc length that is hard coded here.
     """
 
     # Segments and webs
@@ -142,6 +168,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
     adhesive_extent = np.zeros(len(x))
     # id_count = np.zeros(len(x), dtype=int)
 
+    # Loop over non-dimensional span positions of interest
     for i in range(len(x)):
 
         id_profile = np.argmin(np.abs(blade.blade_ref_axis[:,0]-x[i]))
@@ -152,7 +179,8 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
         if np.mean(profile[0:id_le, 1]) < 0:
             profile = np.flip(profile,0)
 
-        profile_curve   = arc_length(profile[:,0], profile[:,1]) / arc_length(profile[:,0], profile[:,1])[-1]
+        total_arc = arc_length(profile[:,0], profile[:,1])[-1]
+        profile_curve   = arc_length(profile[:,0], profile[:,1]) / total_arc
 
         id_layer     = 0
         web_filler_index = False  # introduce web filler index to separate leading and trailing web layups
@@ -164,6 +192,9 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 set_interp_thick = PchipInterpolator(sec['thickness']['grid'], sec['thickness']['values'])
                 thick_i = float(set_interp_thick(x[i]))  # added float
 
+                default_start = False
+                default_end = False
+
                 if 'start_nd_arc' in sec.keys():
                     set_interp = PchipInterpolator(sec['start_nd_arc']['grid'], sec['start_nd_arc']['values'])
                     start_i     = float(set_interp(x[i]))
@@ -173,11 +204,85 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                                 start_i += 5.e-3
                 else:
                     start_i = 0
+                    default_start = True
                 if 'end_nd_arc' in sec.keys():
                     set_interp = PchipInterpolator(sec['end_nd_arc']['grid'], sec['end_nd_arc']['values'])
                     end_i     = float(set_interp(x[i]))
                 else:
                     end_i = 1
+                    default_end = True
+
+                ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
+
+                if 'width' in sec.keys():
+
+                    width_interp = PchipInterpolator(sec['width']['grid'],
+                                                 sec['width']['values'])
+
+                    width_nd = float(width_interp(x[i])) / total_arc / ch
+
+                    if default_start and not default_end:
+
+                        start_i = end_i - width_nd
+
+                        # Wrap value if less than 0.0
+                        start_i += (start_i < 0)
+
+                        default_start = False
+
+                    if default_end and not default_start:
+
+                        end_i = start_i + width_nd
+                        # Reduce the value if greater than 1.0
+                        end_i -= (end_i > 1.0)
+
+                        default_end = False
+
+
+                # If using default for the start and end, then the default
+                # value should be overwritten by the midpoint_nd_arc/width
+                # option set
+                if 'midpoint_nd_arc' in sec.keys() \
+                    and 'width' in sec.keys() \
+                    and default_start and default_end:
+
+                    width_interp = PchipInterpolator(sec['width']['grid'],
+                                                 sec['width']['values'])
+
+                    width_nd = float(width_interp(x[i])) / total_arc / ch
+
+                    if 'fixed' in sec['midpoint_nd_arc'].keys():
+
+                        if sec['midpoint_nd_arc']['fixed'].upper() == 'LE':
+
+                            # profile may have had order flipped after
+                            # previous id_le determination.
+                            id_le = np.argmin(profile[:,0])
+
+                            mid_nd = profile_curve[id_le]
+
+                        elif sec['midpoint_nd_arc']['fixed'].upper() == 'TE':
+
+                            mid_nd = 1.0
+
+                        else:
+                            print("WARNING : Unrecognized keyword for "
+                                  + "['midpoint_nd_arc']['fixed']!")
+                            mid_nd = np.nan
+
+                    else:
+                        mid_interp = PchipInterpolator(sec['midpoint_nd_arc']['grid'],
+                                                     sec['midpoint_nd_arc']['values'])
+
+                        mid_nd = float(mid_interp(x[i]))
+
+                    start_i = mid_nd - 0.5*width_nd
+                    # Wrap value if less than 0.0
+                    start_i += (start_i < 0)
+
+                    end_i = mid_nd + 0.5*width_nd
+                    # Reduce the value if greater than 1.0
+                    end_i -= (end_i > 1.0)
 
                 if thick_i > 1.e-6 and abs(start_i - end_i) > 1.e-3:
                     if 'web' not in sec.keys():                        
@@ -186,17 +291,12 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                         tmp2[i]['segments'][0]['layup'][id_layer]['thickness']     = thick_i
                         tmp2[i]['segments'][0]['layup'][id_layer]['name']          = sec['material'] + '_' + str(x[i])
                         tmp2[i]['segments'][0]['layup'][id_layer]['material_name'] = sec['material']
-                        if 'start_nd_arc' in sec.keys():
 
-                            set_interp = PchipInterpolator(sec['start_nd_arc']['grid'], sec['start_nd_arc']['values'])
-                            tmp2[i]['segments'][0]['layup'][id_layer]['start']     = float(set_interp(x[i]))  # added float
+                        # Should not need to recalculate start and end since
+                        # they were just calculated.
+                        tmp2[i]['segments'][0]['layup'][id_layer]['start']     = start_i
+                        tmp2[i]['segments'][0]['layup'][id_layer]['end']       = end_i
 
-                            set_interp = PchipInterpolator(sec['end_nd_arc']['grid'], sec['end_nd_arc']['values'])
-                            tmp2[i]['segments'][0]['layup'][id_layer]['end']       = float(set_interp(x[i]))  # added float
-
-                        else:
-                            tmp2[i]['segments'][0]['layup'][id_layer]['start']     = 0.
-                            tmp2[i]['segments'][0]['layup'][id_layer]['end']       = 1.
                         if 'fiber_orientation' in sec.keys():
                             set_interp = PchipInterpolator(sec['fiber_orientation']['grid'], sec['fiber_orientation']['values'])
                             tmp2[i]['segments'][0]['layup'][id_layer]['orientation'] = float(set_interp(x[i]) * 180 / np.pi)  # added float
@@ -207,10 +307,12 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                         ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
                         adhesive_extent[i] = min([0.04, 0.04 / ch])
                         if x[i] > span_adhesive and tmp2[i]['segments'][0]['layup'][id_layer]['start'] < adhesive_extent[i] and tmp2[i]['segments'][0]['layup'][id_layer]['end'] < 0.5:
-                            tmp2[i]['segments'][0]['layup'][id_layer]['start'] = adhesive_extent[i] 
+                            tmp2[i]['segments'][0]['layup'][id_layer]['start'] = adhesive_extent[i]
+                            print('WARNING: Layer ', idx_sec, ' start is trimmed for adhesive.')
                         elif x[i] > span_adhesive and tmp2[i]['segments'][0]['layup'][id_layer]['end'] > 1. - adhesive_extent[i] and tmp2[i]['segments'][0]['layup'][id_layer]['start'] > 0.5:
                             tmp2[i]['segments'][0]['layup'][id_layer]['end'] = 1. - adhesive_extent[i]
-                        
+                            print('WARNING: Layer ', idx_sec, ' end is trimmed for adhesive.')
+
                         id_layer = id_layer + 1
                     else:  # if web in sec.keys():
 
@@ -250,6 +352,30 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
 
                                 # Isotropic -> fill the web
                                 elif (not web_filler_index and isinstance(materials[id_mat].E, float)):
+                                    # An error may occur on the following line
+                                    # under these conditions:
+                                    #   - 2 shear webs
+                                    #   - material on only one of the shear webs
+                                    #   - Shear web with material has smaller
+                                    #     ['start_nd_arc']['values'][0]
+                                    #
+                                    # Error can likely be prevented by:
+                                    #   -If shear webs do not go to zero span,
+                                    #   add an additional grid point at zero
+                                    #   with a dummy value of 'start_nd_arc'
+                                    #   that results in the desired sorted
+                                    #   order.
+                                    #
+                                    # Error appears to be due to the fact that
+                                    # webs are reverse sorted around line 100
+                                    # by ['start_nd_arc']['values'][0].
+                                    # Array indices in tmp2 are determined
+                                    # around line 136 as '2 * j + 2' where 'j'
+                                    # is the index in the sorted list. If one
+                                    # has material on the second web, but not
+                                    # the first, this will result in an error.
+                                    # Changing '2 * j + 2' is insufficient to
+                                    # fix the bug.
                                     tmp2[i]['segments'][id_seg]['filler'] = materials[id_mat].name
 
                                     tmp2[i]['segments'][id_seg]['layup'][0]['name'] = 'dummy'
@@ -261,9 +387,9 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
 
                                     # set_interp = PchipInterpolator(sec['thickness']['grid'],sec['thickness']['values'])
                                     thick_web[i, int(id_seg / 2 - 1)] = thick_web[i, int(id_seg / 2 - 1)] + thick_i
-                                    if thick_web[i, int(id_seg / 2 - 1)] < 0.01:
-                                        thick_web[i, int(id_seg / 2 - 1)] = 0.01
-                                        print('WARNING: web filler cannot be thinner than 10mm. This is adjusted here, but please check the input yaml.')
+                                    if thick_web[i, int(id_seg / 2 - 1)] < 0.006:
+                                        thick_web[i, int(id_seg / 2 - 1)] = 0.006
+                                        print('WARNING: web filler cannot be thinner than 6mm. This is adjusted here, but please check the input yaml.')
                                     web_filler_index = True  #  changes to true as web has now already been filled with material
 
                                 # Orthotropic at trailing edge (_te)
@@ -329,11 +455,13 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 x_web_start     = set_interp(start)
                 x_web_end       = set_interp(end)
 
-                x_web_start_le  = x_web_start - thick_web[i, i_web] / blade.chord[i , 1]
-                x_web_start_te  = x_web_start + thick_web[i, i_web] / blade.chord[i , 1]
+                ch = np.interp(x[i], blade.chord[:,0], blade.chord[:,1])
 
-                x_web_end_le    = x_web_end - thick_web[i, i_web] / blade.chord[i , 1]
-                x_web_end_te    = x_web_end + thick_web[i, i_web] / blade.chord[i , 1]
+                x_web_start_le  = x_web_start - thick_web[i, i_web] / ch / 2.0
+                x_web_start_te  = x_web_start + thick_web[i, i_web] / ch / 2.0
+
+                x_web_end_le    = x_web_end - thick_web[i, i_web] / ch / 2.0
+                x_web_end_te    = x_web_end + thick_web[i, i_web] / ch / 2.0
 
                 # Correction to avoid errors in the interpolation at the edges
                 if min(np.diff(np.flip(profile[0:id_le,0]))) < 0:
