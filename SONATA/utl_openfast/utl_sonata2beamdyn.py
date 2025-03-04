@@ -264,7 +264,7 @@ def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
     file.write('{:d}   time_scales_total    - Number of blade input stations (-)\n'
                .format(len(time_scales)))
     file.write('  ---------------------- Time Scales (s) ------------------------------------\n')
-    file.write(''.join(str(t)+',   ' for t in time_scales)[:-4] + '\n')
+    file.write(''.join(str(t)+'   ' for t in time_scales)[:-3] + '\n')
     file.write(' ---------------------- DISTRIBUTED PROPERTIES---------------------------------\n')
 
     assert not (flags_dict['flag_write_BeamDyn_unit_convert'] == 'mm_to_m'), \
