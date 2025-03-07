@@ -504,7 +504,8 @@ class Blade(Component):
                 cs.cbm_gen_mesh(**kwargs)
         return None
 
-    def blade_custom_mesh(self, nodes, cells, materials, split_quads=True):
+    def blade_custom_mesh(self, nodes, cells, materials, split_quads=True,
+                          theta_3=None):
         """
         Give a custom mesh to the blade model.
 
@@ -521,6 +522,11 @@ class Blade(Component):
         split_quads : bool, optional
             Flag for if quad elements should be split into triangles after
             reading the custom mesh.
+        theta_3 : float, optional
+            Value for fiber orientation angle to be passed down into SONATA
+            and ANBA. If None, then zero is passed down.
+            Units are degrees.
+            The default value is None.
 
         Returns
         -------
@@ -543,7 +549,7 @@ class Blade(Component):
         
         for (x, cs) in self.sections:
             cs.cbm_custom_mesh(nodes, cells, materials,
-                               split_quads=split_quads)
+                               split_quads=split_quads, theta_3=theta_3)
         
         return None
 

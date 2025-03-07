@@ -394,7 +394,8 @@ class CBM(object):
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
         return None
 
-    def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True):
+    def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True,
+                        theta_3=None):
         """
         Give a custom mesh to the section model.
 
@@ -411,6 +412,10 @@ class CBM(object):
         split_quads : bool, optional
             Flag for if quad elements should be split into triangles after
             reading the custom mesh.
+        theta_3 : float, optional
+            Value for fiber orientation angle to be passed down into SONATA
+            and ANBA. If None, then zero is passed down. Units are degrees.
+            The default value is None.
 
         Returns
         -------
@@ -423,6 +428,9 @@ class CBM(object):
         cell nodes appropriately for the cell orientation.
 
         """
+        
+        if theta_3 is None:
+            theta_3 = 0
         
         # Generate node list, do not need to explicitly save since each cell
         # saves its own nodes.
@@ -443,7 +451,7 @@ class CBM(object):
                 c.invert_nodes()
             
             c.calc_theta_1()
-            c.theta_3 = 0.0 # not setting the ply orientation
+            c.theta_3 = theta_3
             c.MatID = int(materials[ind])
             c.structured = True
             
