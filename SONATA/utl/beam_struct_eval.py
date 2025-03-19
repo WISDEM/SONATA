@@ -518,7 +518,7 @@ def anbax_export_beam_struct_properties(folder_str, job_str, radial_stations, co
     return None
 
 
-def strain_energy_eval(blade, MatID=None):
+def strain_energy_eval(blade, MatID=None, station_weights=None):
     """
     Calculate the strain energy for a blade with already calculated
     internal loads.
@@ -535,6 +535,11 @@ def strain_energy_eval(blade, MatID=None):
         If None, then all materials will be included in results.
         Materials can be checked by looking at `blade.materials`
         The default is None.
+    station_weights: (N,) numpy.ndarray or None
+        Quadrature integration weights for the station positions.
+        The length `N` should match the number of stations in `blade`.
+        The sum of the quadrature weights should be 1.0.
+        If None, then trapezoidal integration is used.
 
     Returns
     -------
@@ -591,10 +596,13 @@ def strain_energy_eval(blade, MatID=None):
 
     stations_array = np.array([sec[0] for sec in blade.sections])
 
-    quad_length_weights = np.zeros(len(blade.sections))
-    quad_length_weights[0]    = 0.5*(stations_array[1] - stations_array[0])
-    quad_length_weights[-1]   = 0.5*(stations_array[-1] - stations_array[-2])
-    quad_length_weights[1:-1] = 0.5*(stations_array[2:] - stations_array[0:-2])
+    if station_weights is None:
+        quad_length_weights = np.zeros(len(blade.sections))
+        quad_length_weights[0]    = 0.5*(stations_array[1] - stations_array[0])
+        quad_length_weights[-1]   = 0.5*(stations_array[-1] - stations_array[-2])
+        quad_length_weights[1:-1] = 0.5*(stations_array[2:] - stations_array[0:-2])
+    else:
+        quad_length_weights = station_weights
 
     for sec_ind,section in enumerate(blade.sections):
 
@@ -652,7 +660,13 @@ def strain_energy_eval(blade, MatID=None):
         energy_all[sec_ind] = energyM_density * area.reshape(-1,1) \
                                     * quad_length_weights[sec_ind] * length
 
-    directional_energy = np.trapz(energyM_length.T, stations_array) * length
+    # Trapezoid integration
+    # directional_energy = np.trapz(energyM_length.T, stations_array) * length
+
+    # Quadrature rule integration.
+    directional_energy = (energyM_length 
+                          * quad_length_weights.reshape(-1, 1) 
+                          * length).sum(axis=0)
 
     total_energy = np.sum(directional_energy)
 
