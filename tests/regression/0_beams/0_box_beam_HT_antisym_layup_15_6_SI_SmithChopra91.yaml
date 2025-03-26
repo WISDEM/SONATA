@@ -1,0 +1,154 @@
+name: Box_Beam
+description: Example test case - rectangular beam
+
+components:
+#==================== B L A D E ====================================
+    blade:
+        outer_shape_bem:
+            airfoil_position:
+                grid: [0.0, 1.0]
+                labels: [rectangular, rectangular]
+            chord:
+                grid: [0.0, 1.0]
+                values: [1., 1.]  # normalized chord
+            twist:
+                grid: [0.0, 1.0]
+                values: [0.0, 0.0]
+            pitch_axis:
+                grid: [0.0, 1.0]
+                values: [0., 0.]
+                # values: [0.15, 0.3]
+            reference_axis:
+                x:
+                    grid: [0.0, 1.0]
+                    values: [0.0, 762.]
+                y:
+                    grid: [0.0, 1.0]
+                    values: [0.0, 0.0]
+                z:
+                    grid: [0.0, 1.0]
+                    values: [0.0, 0.0]
+            beam_reference_axis:
+                x:
+                    grid: [0.0, 1.0]
+                    values: [0.0, 762.]
+                y:
+                    grid: [0.0, 1.0]
+                    values: [0.0, 0.0]
+                z:
+                    grid: [0.0, 1.0]
+                    values: [0.0, 0.0]
+
+#-------------------- C B M ------------------------------------
+        internal_structure_2d_fem:
+            sections:
+              # --- r/R = 0.0 ---
+              - position: 0.0
+                trim_mass: False
+                mesh_resolution: 100 # ca 450 punkte auf der aeusseren Kurve. - von innen nach aussen.
+                segments:
+                  - id: 0
+                    filler: Null
+                    layup: 
+                        #-[Start[-], End[-], thickness[m], Orientation [deg], MatID[int], 'name'[str]]
+                      - [0., 1., 0.127,   30, 1, 'wall']
+                      - [0., 1., 0.127,   0, 1, 'wall']
+                      - [0., 1., 0.127,   30, 1, 'wall']
+                      - [0., 1., 0.127,   0, 1, 'wall']
+                      - [0., 1., 0.127,   30, 1, 'wall']
+                      - [0., 1., 0.127,   0, 1, 'wall']
+              # --- r/R = 1.0 ---
+              - position: 1.0
+                trim_mass: False
+                mesh_resolution: 100 # ca 450 punkte auf der aeusseren Kurve. - von innen nach aussen.
+                segments:
+                  - id: 0
+                    filler: Null
+                    layup: 
+                        #-[Start[-], End[-], thickness[m], Orientation [deg], MatID[int], 'name'[str]]
+                      - [0., 1., 0.127,   30, 1, 'wall']
+                      - [0., 1., 0.127,   0, 1, 'wall']
+                      - [0., 1., 0.127,   30, 1, 'wall']
+                      - [0., 1., 0.127,   0, 1, 'wall']
+                      - [0., 1., 0.127,   30, 1, 'wall']
+                      - [0., 1., 0.127,   0, 1, 'wall']
+
+
+#0.0 0.0 0.0
+#1.0 0.0 0.0
+#0.0 1.0 0.0
+#0.0 0.0 1.0
+#0.0	0.0	1.0000E+00    0.0
+#0.0	0.0
+#0.0	0.0	0.0	0.0	0.0	0.0
+#0.0	0.0	0.0	0.0	0.0	0.0
+#0.0	0.0	0.0	0.0	0.0	0.0
+#0.0	0.0	0.0	0.0	0.0	0.0
+#==================== A I R F O I L S ==================================
+airfoils:
+   -  name: rectangular
+      coordinates: # follow s-coordinate along the outer profile of the structure
+#           x: [0.4765, 0.4765, -0.4765, -0.4765,  0.4765, 0.4765]   # box beam analogous to Bauchau/Hodges 1999 paper
+#           y: [0.0,    0.2685,  0.2685, -0.2685, -0.2685, 0.0]
+#           x: [0.0121031, 0.0121031, -0.0121031, -0.0121031,  0.0121031, 0.0121031]   # in SI units - m - box beam analogous to Popescu/Hodges 2000 paper p. 551/552 & Hodges 1992 paper
+#           y: [0.0,       0.0068199,  0.0068199, -0.0068199, -0.0068199, 0.0]
+           x: [12.1031, 12.1031, -12.1031, -12.1031,  12.1031, 12.1031]   # in SI units - mm - box beam analogous to Popescu/Hodges 2000 paper p. 551/552 & Hodges 1992 paper
+           y: [0.0,    6.8199,  6.8199, -6.8199, -6.8199, 0.0]
+
+      relative_thickness: 1.0000
+      aerodynamic_center: 0.5000
+      polars:  # dummy 2pi polars (not used in example)
+         -  configuration: Default
+            re: 3.00E+06
+            c_m:
+                grid: [-3.141592653589793, 3.141592653589793]
+                values: [0.0, 0.0]
+            c_l:
+                grid: [-3.141592653589793, 3.141592653589793]
+                values: [0.0, 0.0]
+            c_d:
+                grid: [-3.141592653589793, 3.141592653589793]
+                values: [0.5, 0.5]
+
+materials:
+
+  - id: 1
+    name: AS4_3501_6
+    description: graphite/epoxy - anisotropic AS4/3501-6 material
+    source: Popescu/Hodges 2000 paper p. 551/552
+    orth: 1
+    rho: 1.0                           #kg/mm**3   - dummy density (not applied for box beam example)
+    E_1: 0.142e6                       #N/mm**2, 0° Tensile Modulus
+    E_2: 0.979e4                        #N/mm**2, 90° Tensile Modulus
+    E_3: 0.979e4                         #N/mm**2, E_3 = E_2
+    G_12: 0.60e4                       #N/mm**2, G_ij, is the shear modulus in direction j on the plane whose normal is in direction  i,
+    G_13: 0.60e4                        #N/mm**2, G_13 = G_12
+    G_23: 0.48e4                        #N/mm**2,
+    nu_12: 0.42                         #-, nu_ij is the Poisson's ratio that corresponds to a contraction in direction j when an extension is applied in direction i.
+    nu_13: 0.42                         #-, nu_13 = nu_12
+    nu_23: 0.42                         #-,
+    alpha_11:  Null                      #1/K Coefficient of thermal expansion
+    alpha_22:  Null                      #1/K alpha_22 = alpha_33
+    alpha_33:  Null                      #1/K
+#    Xt: 1800e6                           #N/m**2,, 0° tensile strengh
+#    Xc: 1200e6                           #N/m**2,, 0° compressive strenght
+#    Yt: 60e6                             #N/m**2,, 90° tensile strenght
+#    Yc: 200e6                            #N/m**2,, 90° compressive strenght
+#    S21: 90e6                            #N/m**2,, in-/out of plane shear strength
+
+
+  - id: 2
+    name: graphite_epoxy
+    description: combined graphite/epoxy matarial from Bauchau/Hodges 1990 paper
+    source: http://www.dymoresolutions.com/resume/publications/BauchauHodges99.pdf
+    orth: 1
+    rho: 1000.0  # dummy density
+    E_1: 20.59e+006
+    E_2: 1.42e+006
+    E_3: 1.42e+006
+    G_12: 0.87e6
+    G_13: 0.87e6
+    G_23: 0.87e6
+    nu_12: 0.42
+    nu_13: 0.42
+    nu_23: 0.42

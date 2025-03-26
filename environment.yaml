@@ -16,6 +16,7 @@ dependencies:
   - palettable 
   - openmdao
   - mshr
+  - pytest
   - pip
   - pip:
     - shapely 
