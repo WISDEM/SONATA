@@ -7,6 +7,7 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import sys
+import pytest
 
 sys.path.append(os.path.join(os.path.dirname( os.path.realpath(__file__)),
                              '..'))
@@ -86,6 +87,102 @@ def test_6x6_iea15mw():
     # ===== Build & mesh segments ===== #
     job.blade_gen_section(topo_flag=True, mesh_flag = True)
     
+    # Overwrite section 5 with a custom mesh.
+    write_mesh = False
+    compare_mesh = False
+    read_mesh = False
+    custom_mesh_file = 'section5_mesh.npz'
+    
+    if write_mesh:
+        mesh = job.sections[5][1].mesh
+
+        # Find number of nodes
+        n_nodes = 0
+        
+        for cell_i in mesh:
+            n_nodes = np.maximum(n_nodes, np.max([n.id for n in cell_i.nodes]))
+
+        nodes = np.zeros((n_nodes+1, 2))
+        cells = np.zeros((len(mesh), 3), np.int64)
+        MatID = np.zeros(len(mesh), np.int64)
+        theta_11 = np.zeros(len(mesh))
+        
+        for ind,cell_i in enumerate(mesh):
+            cells[ind] = [n.id for n in cell_i.nodes]
+            MatID[ind] = cell_i.MatID
+            
+            theta_11[ind] = cell_i.theta_11
+            
+            for n in cell_i.nodes:
+                nodes[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
+
+        np.savez(custom_mesh_file, cells=cells, nodes=nodes, MatID=MatID,
+                 theta_11=theta_11)
+
+    if compare_mesh:
+        mesh = job.sections[5][1].mesh
+
+        # Find number of nodes
+        n_nodes = 0
+        
+        for cell_i in mesh:
+            n_nodes = np.maximum(n_nodes, np.max([n.id for n in cell_i.nodes]))
+
+        nodes = np.zeros((n_nodes+1, 2))
+        cells = np.zeros((len(mesh), 3), np.int64)
+        MatID = np.zeros(len(mesh), np.int64)
+        theta_11 = np.zeros(len(mesh))
+        
+        for ind,cell_i in enumerate(mesh):
+            cells[ind] = [n.id for n in cell_i.nodes]
+            MatID[ind] = cell_i.MatID
+            
+            theta_11[ind] = cell_i.theta_11
+            
+            for n in cell_i.nodes:
+                nodes[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
+
+        
+        mesh_data = np.load(
+            os.path.join(os.path.dirname( os.path.realpath(__file__)),
+            custom_mesh_file))
+        
+        print("Max movement in x/y of a node: {:}".format(
+                                    np.abs(mesh_data['nodes'] - nodes).max()))
+        
+        diff_cells = np.where(~np.all(mesh_data['cells'] == cells, axis=1))[0]
+        
+        for ind in diff_cells:
+            print("cell: {:}".format(ind))
+            print("old: {:}".format(mesh_data['cells'][ind]))
+            print("new: {:}".format(cells[ind]))
+        
+        
+        plt.close('all')
+        matplotlib.use(original_backend)
+        subcells = [ind for ind,row in enumerate(cells)
+                    if (1593 in row or 1590 in row)]
+        
+        for cell in cells[subcells]:
+            x = nodes[cell, 0]
+            y = nodes[cell, 1]
+            plt.fill(x, y, 'b', edgecolor='r', alpha=0.5)
+
+        plt.show()
+
+    if read_mesh:
+        
+        mesh_data = np.load(
+            os.path.join(os.path.dirname( os.path.realpath(__file__)),
+            custom_mesh_file))
+
+        job.sections[5][1].cbm_custom_mesh(mesh_data['nodes'],
+                                           mesh_data['cells'],
+                                           mesh_data['MatID'],
+                                           split_quads=True,
+                                           theta_11=mesh_data['theta_11'],
+                                           theta_3=None)
+    
     
     # ===== Recovery Analysis + BeamDyn Outputs ===== #
     
@@ -128,10 +225,19 @@ def test_6x6_iea15mw():
         assert np.allclose(stiff_ref[i], stiff_test[i],
                            atol=1e-4*stiff_ref[i].max()), \
             "Stiffness matrix does not match at station index {:}.".format(i)
-        
+
+        print("Stiffness error: {:}".format(
+            np.abs(stiff_ref[i]-stiff_test[i]).max() / stiff_ref[i].max()))
+
         assert np.allclose(mass_ref[i], mass_test[i],
                            atol=1e-4*mass_ref[i].max()), \
             "Mass matrix does not match at station index {:}.".format(i)
-       
+
+        print("Mass error: {:}".format(
+            np.abs(mass_ref[i]-mass_test[i]).max() / mass_ref[i].max()))
+
     plt.close('all')
     matplotlib.use(original_backend)
+
+if __name__ == "__main__":
+    pytest.main(["-s", "test_iea15mw.py"])
