@@ -396,6 +396,7 @@ class CBM(object):
         
         # Mesh cleanup
         # 1. Identify all nodes with exact repeated coordinates
+        # (tolerance 1e-14)
         # 2. Keep only the lower number node and replace all cells node entries
         # as needed
         # Redo the sort and reassignID call
@@ -413,22 +414,59 @@ class CBM(object):
             for n in cell_i.nodes:
                 node_coords[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
                 node_list[n.id] = n
+        
+        same_coords = (n_nodes+1)* [[]]
+        
+        for ind in range(node_coords.shape[0]):
+            
+            same_coords[ind] = np.where(np.linalg.norm(node_coords
+                                       - node_coords[ind], axis=1) < 1e-14)[0]
+        
+        reduced_sets = [group for group in same_coords if group.shape[0]>1]
+        
+        node_sets = len(reduced_sets)*[None]
+        set_inds = 0
+                
+        for curr in reduced_sets:
+            
+            added = False
+            
+            for i in range(set_inds):
+                if np.intersect1d(curr, node_sets[i]).shape[0] > 0:
+                    added=True
+                    node_sets[i] = np.unique(np.hstack((node_sets[i], curr)))
+            
+            if not added:
+                node_sets[set_inds] = curr
+                set_inds += 1
+                
+        node_sets = node_sets[:set_inds]
+        # WARNING: It could be possible that a node is in multiple node sets.
+        # Using a large enough tolerance should limit this risk
 
-        # Find repeat numbers
-        uniq_coords, unique_inv, counts = np.unique(node_coords, axis=0,
-                                        return_inverse=True,
-                                        return_counts=True)
-        
-        repeat_uniq_ind = np.where(counts > 1)[0]
-        
-        node_sets = [np.where(unique_inv == ind)[0] for ind in repeat_uniq_ind]
-        
         for cell in self.mesh:
             for i,n in enumerate(cell.nodes):
                 
                 for check_set in node_sets:
                     if n.id in check_set:
                         cell.nodes[i] = node_list[check_set[0]]
+        
+        # remove any cell that has repeated nodes
+        remove_inds = []
+        
+        for ind,cell in enumerate(self.mesh):
+            nodes = [n.id for n in cell.nodes]
+            
+            _,counts = np.unique(nodes, return_counts=True)
+            if counts.max() > 1:
+                remove_inds += [ind]
+        
+        if len(remove_inds) > 0:
+            print("Removing Cells with repeated nodes.")
+            
+            self.mesh = [cell
+                         for i, cell in enumerate(self.mesh)
+                         if i not in remove_inds]
         
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
         
