@@ -227,14 +227,14 @@ def test_6x6_iea15mw():
     for i in range(len(mass_ref)):
         
         assert np.allclose(stiff_ref[i], stiff_test[i],
-                           atol=1e-4*stiff_ref[i].max()), \
+                           atol=1e-9*stiff_ref[i].max()), \
             "Stiffness matrix does not match at station index {:}.".format(i)
 
         print("Stiffness error: {:}".format(
             np.abs(stiff_ref[i]-stiff_test[i]).max() / stiff_ref[i].max()))
 
         assert np.allclose(mass_ref[i], mass_test[i],
-                           atol=1e-4*mass_ref[i].max()), \
+                           atol=1e-9*mass_ref[i].max()), \
             "Mass matrix does not match at station index {:}.".format(i)
 
         print("Mass error: {:}".format(

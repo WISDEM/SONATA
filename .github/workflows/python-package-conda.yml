@@ -70,3 +70,7 @@ jobs:
         run: |
           cd examples/6_beam_stress
           python 6_sonata_beam_stress.py
+
+      - name: Run pytest
+        run: |
+          python -m pytest -v --disable-warnings
