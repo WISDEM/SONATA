@@ -350,7 +350,6 @@ class CBM(object):
         # ===================MESH SEGMENT
         for j, seg in enumerate(reversed(self.SegmentLst)):
             self.mesh.extend(seg.mesh_layers(self.SegmentLst, global_minLen, self.WebLst, display=self.display, l0=self.refL))
-            # mesh,nodes = sort_and_reassignID(mesh)
 
         # ===================MESH CORE
         if self.config.flags["mesh_core"]:
@@ -359,6 +358,8 @@ class CBM(object):
                 # core_cell_area = 1.6*global_minLen**2
                 # print(core_cell_area)
                 self.mesh.extend(seg.mesh_core(self.SegmentLst, self.WebLst, core_cell_area, display=self.display))
+
+
 
         # ===================consolidate mesh on web interface
         for web in self.WebLst:
@@ -392,10 +393,49 @@ class CBM(object):
             if c.orientation == False:
                 c.invert_nodes()
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        
+        # Mesh cleanup
+        # 1. Identify all nodes with exact repeated coordinates
+        # 2. Keep only the lower number node and replace all cells node entries
+        # as needed
+        # Redo the sort and reassignID call
+        
+        # Find number of nodes
+        n_nodes = 0
+        
+        for cell_i in self.mesh:
+            n_nodes = np.maximum(n_nodes, np.max([n.id for n in cell_i.nodes]))
+
+        node_coords = np.full((n_nodes+1, 2), np.nan)
+        node_list = (n_nodes+1)* [None]
+        
+        for ind,cell_i in enumerate(self.mesh):
+            for n in cell_i.nodes:
+                node_coords[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
+                node_list[n.id] = n
+
+        # Find repeat numbers
+        uniq_coords, unique_inv, counts = np.unique(node_coords, axis=0,
+                                        return_inverse=True,
+                                        return_counts=True)
+        
+        repeat_uniq_ind = np.where(counts > 1)[0]
+        
+        node_sets = [np.where(unique_inv == ind)[0] for ind in repeat_uniq_ind]
+        
+        for cell in self.mesh:
+            for i,n in enumerate(cell.nodes):
+                
+                for check_set in node_sets:
+                    if n.id in check_set:
+                        cell.nodes[i] = node_list[check_set[0]]
+        
+        (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        
         return None
 
     def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True,
-                        theta_3=None):
+                        theta_11=None, theta_3=None):
         """
         Give a custom mesh to the section model.
 
@@ -454,6 +494,9 @@ class CBM(object):
             c.theta_3 = theta_3
             c.MatID = int(materials[ind])
             c.structured = True
+            
+            if theta_11 is not None:
+                c.theta_1[0] = theta_11[ind]
             
             self.mesh[ind] = c
         

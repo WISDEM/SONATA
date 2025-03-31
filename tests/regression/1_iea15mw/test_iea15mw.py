@@ -143,30 +143,34 @@ def test_6x6_iea15mw():
                 nodes[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
 
         
-        mesh_data = np.load(
-            os.path.join(os.path.dirname( os.path.realpath(__file__)),
-            custom_mesh_file))
+        # mesh_data = np.load(
+        #     os.path.join(os.path.dirname( os.path.realpath(__file__)),
+        #     custom_mesh_file))
         
-        print("Max movement in x/y of a node: {:}".format(
-                                    np.abs(mesh_data['nodes'] - nodes).max()))
+        # print("Max movement in x/y of a node: {:}".format(
+        #                             np.abs(mesh_data['nodes'] - nodes).max()))
         
-        diff_cells = np.where(~np.all(mesh_data['cells'] == cells, axis=1))[0]
+        # diff_cells = np.where(~np.all(mesh_data['cells'] == cells, axis=1))[0]
         
-        for ind in diff_cells:
-            print("cell: {:}".format(ind))
-            print("old: {:}".format(mesh_data['cells'][ind]))
-            print("new: {:}".format(cells[ind]))
+        # for ind in diff_cells:
+        #     print("cell: {:}".format(ind))
+        #     print("old: {:}".format(mesh_data['cells'][ind]))
+        #     print("new: {:}".format(cells[ind]))
         
         
         plt.close('all')
         matplotlib.use(original_backend)
-        subcells = [ind for ind,row in enumerate(cells)
-                    if (1593 in row or 1590 in row)]
-        
-        for cell in cells[subcells]:
+        # subcells = [ind for ind,row in enumerate(cells)
+        #             if (1593 in row or 1590 in row)]
+        #
+        # for cell in cells[subcells]:
+        for cell in cells:
             x = nodes[cell, 0]
             y = nodes[cell, 1]
             plt.fill(x, y, 'b', edgecolor='r', alpha=0.5)
+
+        plt.xlim((0.140, 0.165))
+        plt.ylim((1.370, 1.410))
 
         plt.show()
 
