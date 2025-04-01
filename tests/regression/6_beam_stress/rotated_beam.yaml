@@ -1,4 +1,4 @@
-name: Box_Beam
+name: Rotated_Beam
 description: Simple rectangular beam
 components:
     blade:
