@@ -198,6 +198,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                 if 'start_nd_arc' in sec.keys():
                     set_interp = PchipInterpolator(sec['start_nd_arc']['grid'], sec['start_nd_arc']['values'])
                     start_i     = float(set_interp(x[i]))
+                    start_i -= 1.0*(start_i >= 1.0)
                     if start_i>0. and start_i<0.1 and id_layer>0:
                         for kk in range(len(tmp2[i]['segments'][0]['layup'])):
                             if abs(start_i - tmp2[i]['segments'][0]['layup'][kk]['end']) < 1.e-5:
@@ -539,7 +540,7 @@ def converter_WT(blade, cs_pos, byml, materials, mesh_resolution):
                     lst[i][1].segments[0]['Layup'][j][0] = 0
                 if lst[i][1].segments[0]['Layup'][j][1] >= max_end - tolerance:
                     lst[i][1].segments[0]['Layup'][j][1] = 1
-    
+
     return np.asarray(lst)
 
 

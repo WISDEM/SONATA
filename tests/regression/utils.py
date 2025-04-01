@@ -39,4 +39,45 @@ def load_bd_blade(fname):
         mass[i] = np.genfromtxt(lines[18+i*15:24+i*15])
 
     return mass, stiff
+
+def compare_bd_blade(ref_path, test_path, tolerance=1e-9):
+    """
+    
+
+    Parameters
+    ----------
+    ref_path : filepath
+        Reference beamdyn blade file.
+    test_path : filepath
+        Test beamdyn blade file.
+    tolerance : float
+        This is mulitiplied by the largest element of the 6x6 matrix to set
+        `atol` in `np.allclose`
+
+    Returns
+    -------
+    None.
+
+    """
+    
+    mass_ref, stiff_ref = load_bd_blade(ref_path)
+    mass_test, stiff_test = load_bd_blade(test_path)
+    
+    for i in range(len(mass_ref)):
+        
+        assert np.allclose(stiff_ref[i], stiff_test[i],
+                           atol=tolerance*stiff_ref[i].max()), \
+            "Stiffness matrix does not match at station index {:}.".format(i)
+
+        print("Stiffness error: {:}".format(
+            np.abs(stiff_ref[i]-stiff_test[i]).max() / stiff_ref[i].max()))
+
+        assert np.allclose(mass_ref[i], mass_test[i],
+                           atol=tolerance*mass_ref[i].max()), \
+            "Mass matrix does not match at station index {:}.".format(i)
+
+        print("Mass error: {:}".format(
+            np.abs(mass_ref[i]-mass_test[i]).max() / mass_ref[i].max()))
+        
+    return
     
