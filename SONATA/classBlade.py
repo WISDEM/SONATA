@@ -505,7 +505,7 @@ class Blade(Component):
         return None
 
     def blade_custom_mesh(self, nodes, cells, materials, split_quads=True,
-                          theta_3=None):
+                          theta_11=None, theta_3=None):
         """
         Give a custom mesh to the blade model.
 
@@ -522,6 +522,10 @@ class Blade(Component):
         split_quads : bool, optional
             Flag for if quad elements should be split into triangles after
             reading the custom mesh.
+        theta_11 : list of M floats or None, optional
+            In-plane rotation values for mesh elements. If not provided,
+            Then rotation of material properties is based on node coordinates
+            and order for element.
         theta_3 : float, optional
             Value for fiber orientation angle to be passed down into SONATA
             and ANBA. If None, then zero is passed down.
@@ -539,17 +543,12 @@ class Blade(Component):
         
         Still requires reading a yaml file first for materials information.
         
-        Assumes mesh passed in is structured to set material orientation.
-        
-        
-        Cannot currently set the ply orientation except by ordering the
-        cell nodes appropriately for the cell orientation.
-
         """
         
         for (x, cs) in self.sections:
             cs.cbm_custom_mesh(nodes, cells, materials,
-                               split_quads=split_quads, theta_3=theta_3)
+                               split_quads=split_quads, theta_11=theta_11,
+                               theta_3=theta_3)
         
         return None
 
