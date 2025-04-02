@@ -17,8 +17,8 @@ jobs:
     strategy:
       fail-fast: False
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.8", "3.9"]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
       - name: checkout repository
@@ -46,6 +46,10 @@ jobs:
         run: |
           pip install -e .
 
+      - name: Run pytest
+        run: |
+          python -m pytest -v --disable-warnings
+
       - name: Run example 0
         run: |
           cd examples/0_beams
@@ -71,6 +75,3 @@ jobs:
           cd examples/6_beam_stress
           python 6_sonata_beam_stress.py
 
-      - name: Run pytest
-        run: |
-          python -m pytest -v --disable-warnings
