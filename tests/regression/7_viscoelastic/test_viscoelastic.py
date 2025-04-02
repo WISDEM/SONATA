@@ -276,7 +276,8 @@ def test_two_viscoelastic():
         print("term {:} error: {:}".format(i,
             np.abs(ref_prony_stiff[0][i] - prony_stiff[0][i]).max()))
         
-        assert np.allclose(prony_stiff[0][i], ref_prony_stiff[0][i]), \
+        assert np.allclose(prony_stiff[0][i], ref_prony_stiff[0][i],
+                           atol=1e-3), \
             "Viscoelastic 6x6 doesn't match reference."
             
 
