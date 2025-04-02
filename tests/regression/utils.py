@@ -40,6 +40,48 @@ def load_bd_blade(fname):
 
     return mass, stiff
 
+
+def load_bd_visco(fname):
+    """
+    Load matrices generated in beamdyn blade viscoelastic file to check in
+    tests.
+
+    Parameters
+    ----------
+    fname : str
+        Filename and/or path of beamdyn blade viscoelastic file to load.
+
+    Returns
+    -------
+    stiff : list of lists of (6,6) numpy.ndarrays
+        Stiffness matrices for each station (outer list) and each timescale
+        (inner list).
+
+    """
+    
+    # Get number of stations
+    with open(fname, 'r') as file:
+        lines = file.readlines()
+       
+    n_stations = int(lines[3].split()[0])
+    n_terms = int(lines[4].split()[0])
+    
+    stiff = n_stations * [None]
+    
+    stiff = [n_terms*[None] for _ in range(n_stations)]
+    
+    lines_per_mat = 7
+    lines_station = lines_per_mat * n_terms + 1
+        
+    for i in range(n_stations):
+        for j in range(n_terms):
+            
+            stiff[i][j] = np.genfromtxt(
+                lines[9+lines_station*i+lines_per_mat*j:
+                      15+lines_station*i+lines_per_mat*j])
+
+    return stiff
+
 def compare_bd_blade(ref_path, test_path, tolerance=1e-9):
     """
     
