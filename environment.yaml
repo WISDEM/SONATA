@@ -3,7 +3,7 @@ channels:
   - defaults
 
 dependencies:
-  - pythonocc-core==7.4.1 
+  - pythonocc-core 
   - fenics
   - pint 
   - intervaltree 
