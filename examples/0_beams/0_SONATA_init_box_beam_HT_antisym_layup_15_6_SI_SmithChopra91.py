@@ -5,10 +5,17 @@ Created on Mo Oct 07 11:18:28 2019
 @author: Roland Feil
 """
 
+print("Started script.")
+
 import os
 
 import time
+
+print("Trying to import SONATA")
+
 from SONATA.classBlade import Blade
+
+print("Import sucessful.")
 
 
 # ==============
