@@ -1,4 +1,4 @@
-[![Build Status](https://github.com/ptrbortolotti/SONATA/workflows/CI_SONATA/badge.svg?branch=master)](https://github.com/ptrbortolotti/SONATA/actions)
+[![Build Status](https://github.com/WISDEM/SONATA/workflows/CI_SONATA/badge.svg?branch=master)](https://github.com/WISDEM/SONATA/actions)
 
 # SONATA
 
