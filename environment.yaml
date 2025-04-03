@@ -20,3 +20,6 @@ dependencies:
     - shapely 
     - triangle 
     - quadpy
+
+variables:
+  PIP_EXTRA_INDEX_URL: https://pypi.org/simple
