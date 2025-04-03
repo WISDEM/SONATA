@@ -19,7 +19,7 @@ You should do this in the folder that you want to clone SONATA to.
 ```
 conda config --add channels conda-forge
 conda config --add channels tpaviot
-git clone git@github.com:ptrbortolotti/SONATA.git
+git clone git@github.com:WISDEM/SONATA.git
 cd SONATA
 ```
 If you have a mac with a newer chip, run the following:

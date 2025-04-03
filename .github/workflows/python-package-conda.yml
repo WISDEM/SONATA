@@ -20,12 +20,13 @@ jobs:
         os: [ubuntu-latest, macos-14]
         python-version: ["3.9", "3.10", "3.11"]
 
-    env:
-      CONDA_SUBDIR: ${{ matrix.os == 'macos-14' && 'osx-64' || '' }}
-
     steps:
       - name: checkout repository
         uses: actions/checkout@v2
+
+      - name: Set CONDA_SUBDIR for macOS
+        if: matrix.os == 'macos-14'
+        run: echo "CONDA_SUBDIR=osx-64" >> $GITHUB_ENV
 
       - name: Install miniconda
         uses: conda-incubator/setup-miniconda@v2
