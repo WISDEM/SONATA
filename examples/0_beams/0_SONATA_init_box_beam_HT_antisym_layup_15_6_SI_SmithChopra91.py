@@ -10,8 +10,6 @@ import os
 import time
 from SONATA.classBlade import Blade
 
-import matplotlib
-matplotlib.use('Agg')
 
 # ==============
 # Main
