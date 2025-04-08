@@ -24,10 +24,6 @@ jobs:
       - name: checkout repository
         uses: actions/checkout@v2
 
-      # - name: Set CONDA_SUBDIR for macOS
-      #   if: matrix.os == 'macos-14'
-      #   run: echo "CONDA_SUBDIR=osx-64" >> $GITHUB_ENV
-
       - name: Install miniconda
         uses: conda-incubator/setup-miniconda@v2
         # https://github.com/marketplace/actions/setup-miniconda
@@ -50,22 +46,15 @@ jobs:
         run: |
           pip install -e .
 
-#       - name: Install dependencies
-#         shell: bash -l {0}
-#         run: |
-#           conda activate test
-#           conda install --force-reinstall mpi4py openmpi
-#           conda list | grep mpi  # Debugging step to check MPI versions
+      - name: Run pytest
+        run: |
+          python -m pytest -v --disable-warnings
 
       - name: Run example 0
         run: |
           cd examples/0_beams
           export MPLBACKEND=Agg
           python 0_SONATA_init_box_beam_HT_antisym_layup_15_6_SI_SmithChopra91.py
-      
-      - name: Run pytest
-        run: |
-          python -m pytest -v --disable-warnings
 
       - name: Run example 1
         run: |
