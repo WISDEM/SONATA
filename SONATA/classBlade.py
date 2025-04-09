@@ -606,7 +606,39 @@ class Blade(Component):
 
         return None
 
-     
+    def blade_exp_stress_strain_map(self, **kwargs):
+        """
+        Creates outputs for stress and strain recovery maps.
+
+        Parameters
+        ----------
+        output_folder : str, optional
+            Folder to output mapping files to.
+        **kwargs : TYPE
+            Ignored.
+
+        Returns
+        -------
+        None.
+        
+        Notes
+        -----
+        
+        Saves out npz files for each station to map from sectional internal
+        forces and moments to stress and strain in each element.
+
+        """
+        
+        ac = ANBAXConfig()
+        for ind,(x, cs) in enumerate(self.sections):
+
+            cs.config.anbax_cfg = ac
+
+            print("STATUS:\t Running Stress and Strain Maps at %s" % (x))
+            cs.cbm_exp_stress_strain_map(ind, x, **kwargs)
+        pass
+
+
     def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0, solver='vabs', filename = None):
         """
         Exports the beam_properties in the 
