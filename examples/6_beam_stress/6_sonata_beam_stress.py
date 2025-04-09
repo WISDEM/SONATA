@@ -18,7 +18,7 @@ flag_ref_axes_wt        = True # if true, rotate reference axes from wind defini
 # Define mesh resolution, i.e. the number of points along the profile that is used for out-to-inboard meshing of a 2D blade cross section
 mesh_resolution = 400
 # For plots within blade_plot_sections
-attribute_str           = 'strainM.epsilon12'  # default: 'MatID' (theta_3 - fiber orientation angle)
+attribute_str           = 'stress.sigma12'  # default: 'MatID' (theta_3 - fiber orientation angle)
                                             # others:  'theta_3' - fiber orientation angle
                                             #          'stress.sigma11' (use sigma_ij to address specific component)
                                             #          'stressM.sigma11'
@@ -86,7 +86,7 @@ flags_dict['flag_output_zero_twist'] = flag_output_zero_twist
 
 # Flag for different load input formats.
 # Just used for example script, not passed to SONATA
-flag_constant_loads = False
+flag_constant_loads = True
 
 if flag_constant_loads:
     # forces, N (F1: axial force
@@ -95,7 +95,7 @@ if flag_constant_loads:
     # moments, Nm (M1: torsional moment,
     #              M2: bending moment about x, (axis parallel to chord)
     #              M3: bending moment around y)
-    Loads_dict = {"Forces":[0.0,0.0,0.0],"Moments":[0.0,1.0e3,0.0]}
+    Loads_dict = {"Forces":[1.0e3,0.0,0.0],"Moments":[0.0,0.0,0.0]}
 else:
 
     # Forces and moments have a first column of the station (normalized length)
@@ -105,10 +105,10 @@ else:
     # Set forces or moments at the 0.0 station to have analytical stress/strain
     # output to compare to.
 
-    recover_Forces = np.array([[0.0, 0.0, 0.0, 0.0],
+    recover_Forces = np.array([[0.0, 1.0e3, 0.0, 0.0],
                                [1.0, 0.0, 0.0, 0.0]])
 
-    recover_Moments = np.array([[0.0, 1.0e3, 0.0, 0.0],
+    recover_Moments = np.array([[0.0, 0.0, 0.0, 0.0],
                                 [1.0, 0.0, 0.0, 0.0]])
 
     Loads_dict = {"Forces" : recover_Forces,
@@ -147,6 +147,80 @@ if flag_recovery:
     for ind,component in enumerate(component_order):
         print('Strain Energy {} : {:.4f}'.format(component,
                                          directional_energy[ind]/total_energy))
+
+
+# ===== Verification That Stresses Integrate -> Applied Force/Moment ===== #
+
+if flag_recovery:
+
+    for sec_ind,section in enumerate(job.sections):
+
+        (x,cs) = section
+        cells = cs.mesh
+
+        force_moment = np.zeros(6)
+
+        area = np.nan*np.zeros(len(cells))
+
+        for ind,c in enumerate(cells):
+
+            area = c.calc_area()
+
+            force_moment[0] += c.stress.sigma11*area
+            force_moment[1] += c.stress.sigma12*area
+            force_moment[2] += c.stress.sigma13*area
+
+            cxy = c.calc_center()
+
+            # Equations for integrated forces and moments are taken
+            # from classCBM.py -> cbm_run_viscoelastic
+            # However, the ordering on the left needs to be taken from
+            # beam_struct_eval.py -> beam_struct_eval
+
+            force_moment[3] += area*(c.stress.sigma13*cxy[0]
+                                     - c.stress.sigma12*cxy[1])
+
+            force_moment[4] += c.stress.sigma11*area*cxy[1]
+
+            force_moment[5] += c.stress.sigma11*area*(-cxy[0])
+
+        # Interpolate Loads_dict to the current position
+        if flag_constant_loads:
+
+            applied_loads = np.hstack((Loads_dict['Forces'],
+                                             Loads_dict['Moments']))
+
+        else:
+            applied_loads = np.zeros(6)
+
+            applied_loads[0] = np.interp(x, Loads_dict['Forces'][:, 0],
+                                         Loads_dict['Forces'][:, 1])
+
+            applied_loads[1] = np.interp(x, Loads_dict['Forces'][:, 0],
+                                         Loads_dict['Forces'][:, 2])
+
+            applied_loads[2] = np.interp(x, Loads_dict['Forces'][:, 0],
+                                         Loads_dict['Forces'][:, 3])
+
+            applied_loads[3] = np.interp(x, Loads_dict['Moments'][:, 0],
+                                         Loads_dict['Moments'][:, 1])
+
+            applied_loads[4] = np.interp(x, Loads_dict['Moments'][:, 0],
+                                         Loads_dict['Moments'][:, 2])
+
+            applied_loads[5] = np.interp(x, Loads_dict['Moments'][:, 0],
+                                         Loads_dict['Moments'][:, 3])
+
+        diff = force_moment - applied_loads
+
+        # Normalize the recovered forces / moments
+        # Add 1.0 in denominator to prevent divide by zero and accept
+        # small absolute errors when stresses are near zero.
+        norm_diff = np.linalg.norm(diff) \
+                        / (np.linalg.norm(applied_loads) + 1.0)
+
+        assert (norm_diff < 1e-4), \
+            "Recovered stresses do not integrate to applied loads."
 
 # ===== Analytical Calculations for Stress Verification ===== #
 

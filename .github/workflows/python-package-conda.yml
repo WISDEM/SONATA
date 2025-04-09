@@ -17,8 +17,8 @@ jobs:
     strategy:
       fail-fast: False
       matrix:
-        os: [ubuntu-latest]
-        python-version: ["3.8", "3.9"]
+        os: [ubuntu-latest, macos-latest]
+        python-version: ["3.9", "3.10", "3.11"]
 
     steps:
       - name: checkout repository
@@ -46,27 +46,37 @@ jobs:
         run: |
           pip install -e .
 
+      - name: Run pytest
+        run: |
+          python -m pytest -v --disable-warnings
+
       - name: Run example 0
         run: |
           cd examples/0_beams
+          export MPLBACKEND=Agg
           python 0_SONATA_init_box_beam_HT_antisym_layup_15_6_SI_SmithChopra91.py
-      
+
       - name: Run example 1
         run: |
           cd examples/1_IEA15MW
+          export MPLBACKEND=Agg
           python 1_sonata_IEA15.py
       
       - name: Run example 2
         run: |
           cd examples/2_IEA22MW
+          export MPLBACKEND=Agg
           python 2_sonata_IEA22.py
       
       - name: Run example 5
         run: |
           cd examples/5_IEA_5MW
+          export MPLBACKEND=Agg
           python 5_sonata_IEA5.py
 
       - name: Run example 6
         run: |
           cd examples/6_beam_stress
+          export MPLBACKEND=Agg
           python 6_sonata_beam_stress.py
+

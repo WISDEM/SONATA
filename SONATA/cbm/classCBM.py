@@ -350,7 +350,6 @@ class CBM(object):
         # ===================MESH SEGMENT
         for j, seg in enumerate(reversed(self.SegmentLst)):
             self.mesh.extend(seg.mesh_layers(self.SegmentLst, global_minLen, self.WebLst, display=self.display, l0=self.refL))
-            # mesh,nodes = sort_and_reassignID(mesh)
 
         # ===================MESH CORE
         if self.config.flags["mesh_core"]:
@@ -359,6 +358,8 @@ class CBM(object):
                 # core_cell_area = 1.6*global_minLen**2
                 # print(core_cell_area)
                 self.mesh.extend(seg.mesh_core(self.SegmentLst, self.WebLst, core_cell_area, display=self.display))
+
+
 
         # ===================consolidate mesh on web interface
         for web in self.WebLst:
@@ -392,10 +393,87 @@ class CBM(object):
             if c.orientation == False:
                 c.invert_nodes()
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        
+        # Mesh cleanup
+        # 1. Identify all nodes with exact repeated coordinates
+        # (tolerance 1e-14)
+        # 2. Keep only the lower number node and replace all cells node entries
+        # as needed
+        # Redo the sort and reassignID call
+        
+        # Find number of nodes
+        n_nodes = 0
+        
+        for cell_i in self.mesh:
+            n_nodes = np.maximum(n_nodes, np.max([n.id for n in cell_i.nodes]))
+
+        node_coords = np.full((n_nodes+1, 2), np.nan)
+        node_list = (n_nodes+1)* [None]
+        
+        for ind,cell_i in enumerate(self.mesh):
+            for n in cell_i.nodes:
+                node_coords[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
+                node_list[n.id] = n
+        
+        same_coords = (n_nodes+1)* [[]]
+        
+        for ind in range(node_coords.shape[0]):
+            
+            same_coords[ind] = np.where(np.linalg.norm(node_coords
+                                       - node_coords[ind], axis=1) < 1e-14)[0]
+        
+        reduced_sets = [group for group in same_coords if group.shape[0]>1]
+        
+        node_sets = len(reduced_sets)*[None]
+        set_inds = 0
+                
+        for curr in reduced_sets:
+            
+            added = False
+            
+            for i in range(set_inds):
+                if np.intersect1d(curr, node_sets[i]).shape[0] > 0:
+                    added=True
+                    node_sets[i] = np.unique(np.hstack((node_sets[i], curr)))
+            
+            if not added:
+                node_sets[set_inds] = curr
+                set_inds += 1
+                
+        node_sets = node_sets[:set_inds]
+        # WARNING: It could be possible that a node is in multiple node sets.
+        # Using a large enough tolerance should limit this risk
+
+        for cell in self.mesh:
+            for i,n in enumerate(cell.nodes):
+                
+                for check_set in node_sets:
+                    if n.id in check_set:
+                        cell.nodes[i] = node_list[check_set[0]]
+        
+        # remove any cell that has repeated nodes
+        remove_inds = []
+        
+        for ind,cell in enumerate(self.mesh):
+            nodes = [n.id for n in cell.nodes]
+            
+            _,counts = np.unique(nodes, return_counts=True)
+            if counts.max() > 1:
+                remove_inds += [ind]
+        
+        if len(remove_inds) > 0:
+            print("Removing Cells with repeated nodes.")
+            
+            self.mesh = [cell
+                         for i, cell in enumerate(self.mesh)
+                         if i not in remove_inds]
+        
+        (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        
         return None
 
     def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True,
-                        theta_3=None):
+                        theta_11=None, theta_3=None):
         """
         Give a custom mesh to the section model.
 
@@ -454,6 +532,9 @@ class CBM(object):
             c.theta_3 = theta_3
             c.MatID = int(materials[ind])
             c.structured = True
+            
+            if theta_11 is not None:
+                c.theta_1[0] = theta_11[ind]
             
             self.mesh[ind] = c
         

@@ -1,11 +1,9 @@
 channels:
   - conda-forge
   - defaults
-  - tpaviot
 
 dependencies:
-  - python>=3.8,<3.10
-  - pythonocc-core==7.4.1 
+  - pythonocc-core 
   - fenics
   - pint 
   - intervaltree 
@@ -16,8 +14,11 @@ dependencies:
   - palettable 
   - openmdao
   - mshr
+  - pytest
   - pip
   - pip:
     - shapely 
     - triangle 
-    - quadpy
+
+variables:
+  PIP_EXTRA_INDEX_URL: https://pypi.org/simple
