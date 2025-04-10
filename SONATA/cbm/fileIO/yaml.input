@@ -7,17 +7,13 @@
 #USER MANUAL:
 
 #2)AREA_R250.stp
-# - If the input_type = 2 is chosen, the user has to provide a .stp file that has the crosssection coordinate system, 
-#		x-axis is chordwise and points to the trailing edge, y-axis upwards
-# - If the input_type = 3 is chosen, the user has to provide 
 
 #===============================SETUP===================================				 
 Setup:
     mat_filename: mat_database.input	#Path and filename of the Material Database
     NbOfWebs: 0							#True or False for Balance Weight			[boolean]		DEFAULT=FALSE
     BalanceWeight: False				
-    input_type: 3						#0) Airfoil from UIUC Database; 1) Geometry from .dat file; 2)2d .step or .iges 3)3D .step or .iges and radial station of crosssection 	4) generate 3D-Blade from twist,taper,airfoils,1/4-line			[int] DEFAULT=0	
-    datasource: examples/AREA_Blatt_L.stp  #0)	naca23012					1) AREA_R250.dat			2)AREA_R230.stp	 			3)AREA_Blatt_L.stp	 4)folder of data 						[string] DEFAULT=NONE
+	datasource: examples/AREA_Blatt_L.stp  #0)	naca23012					1) AREA_R250.dat			2)AREA_R230.stp	 			3)AREA_Blatt_L.stp	 4)folder of data 						[string] DEFAULT=NONE
     radial_station: 260					#Radial station of crosssection. Only necessary for input type 3. [float]	Default=NONE
     scale_factor: 1						#use as reference scale factor				[float] 		DEFAULT=1
     Theta: 6.7							#To place the Origin of the SONATA Coordinates at the intersection of the by Theta rotated xaxis. [float] DEFAULT = 0

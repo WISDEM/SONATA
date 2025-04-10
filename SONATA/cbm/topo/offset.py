@@ -8,11 +8,125 @@ Created on Mon Nov 21 15:37:44 2016
 import matplotlib.pyplot as plt
 import numpy as np
 import shapely.geometry as shp
+from shapely.geometry import MultiPolygon
 
 # Local modules
 from .utils import (P2Pdistance, Polygon_orientation,
                     calc_DCT_angles, isclose, unique_rows,)
 
+def get_largest_polygon(multipolygon):
+    # Ensure the input is a MultiPolygon
+    if not isinstance(multipolygon, MultiPolygon):
+        raise ValueError("Input must be a MultiPolygon object")
+
+    # Initialize variables to track the largest polygon
+    largest_polygon = None
+    largest_area = 0
+
+    # Iterate through each polygon in the MultiPolygon
+    for polygon in multipolygon.geoms:
+        # Compute the area of the current polygon
+        area = polygon.area
+        # Check if this polygon has a larger area than the current largest
+        if area > largest_area:
+            largest_area = area
+            largest_polygon = polygon
+
+    return largest_polygon
+
+def combine_close_points(points, tolerance, length_threshold):
+    def distance(p1, p2):
+        return np.linalg.norm(p1 - p2)
+    
+    def segment_length(start_idx, end_idx):
+        # Calculate the length of the segment from points[start_idx] to points[end_idx]
+        segment_length = 0
+        for i in range(start_idx, end_idx):
+            segment_length += distance(points[i], points[i+1])
+        return segment_length
+    
+    combined_points = []
+    i = 0
+    
+    while i < len(points):
+        close_points = [points[i]]
+        j = i + 1
+        
+        while j < len(points) and distance(points[j], points[j-1]) <= tolerance:
+            close_points.append(points[j])
+            j += 1
+        
+        if len(close_points) > 1:
+            # Check if the length of the segment is within the threshold
+            segment_len = segment_length(i, j-1)
+            if segment_len < length_threshold and segment_len > 3 * tolerance:
+                # Keep the middle point if the length is less than the threshold
+                # Cannot just keep middle point if that would eliminate the
+                # first or last point because that causes the start/end of
+                # the section to move and may cause the segement to no longer
+                # close
+                if i == 0:
+                    combined_points.append(points[0])
+                middle_index = len(close_points) // 2
+                combined_points.append(close_points[middle_index])
+                if j == len(points):
+                    # last point is j-1 by the while loop
+                    combined_points.append(points[-1])
+            else:
+                # Keep all points if the length is greater than or equal to the threshold
+                combined_points.extend(close_points)
+        else:
+            combined_points.append(points[i])
+        
+        i = j
+    
+    return np.array(combined_points)
+
+# Function to check if two line segments (p1, q1) and (p2, q2) intersect
+def do_intersect(p1, q1, p2, q2):
+    def orientation(p, q, r):
+        val = (float(q[1] - p[1]) * (r[0] - q[0])) - (float(q[0] - p[0]) * (r[1] - q[1]))
+        if val > 0:
+            return 1  # Clockwise
+        elif val < 0:
+            return 2  # Counterclockwise
+        else:
+            return 0  # Collinear
+
+    def on_segment(p, q, r):
+        if min(p[0], q[0]) <= r[0] <= max(p[0], q[0]) and min(p[1], q[1]) <= r[1] <= max(p[1], q[1]):
+            return True
+        return False
+
+    o1 = orientation(p1, q1, p2)
+    o2 = orientation(p1, q1, q2)
+    o3 = orientation(p2, q2, p1)
+    o4 = orientation(p2, q2, q1)
+
+    # General case
+    if o1 != o2 and o3 != o4:
+        return True
+
+    # Special cases
+    if o1 == 0 and on_segment(p1, q1, p2):
+        return True
+    if o2 == 0 and on_segment(p1, q1, q2):
+        return True
+    if o3 == 0 and on_segment(p2, q2, p1):
+        return True
+    if o4 == 0 and on_segment(p2, q2, q1):
+        return True
+
+    return False
+
+# Function to check if a shape intersects itself
+def shape_intersects_itself(coords):
+    num_points = len(coords)
+    for i in range(num_points - 1):  # Loop to (num_points - 1) to avoid out-of-bounds access
+        for j in range(i + 2, num_points - (1 if i == 0 else 0)):  # Adjusting the range to avoid out-of-bounds
+            if do_intersect(coords[i], coords[i + 1], coords[j], coords[(j + 1) % num_points]):
+                return [True, coords[i:j]]
+    return [False, coords]
 
 def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
     # OFFSET ALGORITHM
@@ -22,9 +136,15 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
     # ==============SHAPELY-OFFSET ALGORITHM====================================
     if P2Pdistance(arrPts[0], arrPts[-1]) <= 1e-6:
         closed = True
-        afpoly = shp.Polygon(arrPts)
-        noffafpoly = afpoly.buffer(-dist)  # Inward offset
-        data = np.array(noffafpoly.exterior.xy).T
+        try:
+            afpoly = shp.Polygon(arrPts)
+            noffafpoly = afpoly.buffer(-dist)  # Inward offset
+            data = np.array(noffafpoly.exterior.xy).T
+        except AttributeError as e:
+            afpoly = shp.Polygon(arrPts)
+            noffaf_multipoly = afpoly.buffer(-dist)  # Inward offset
+            noffafpoly = get_largest_polygon(noffaf_multipoly) # If there are overlaps find polygon with largest area
+            data = np.array(noffafpoly.exterior.xy).T
 
     else:
         closed = False
@@ -56,8 +176,6 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
         if Orientation == True:
             data = np.flipud(data)
 
-    # if closed == False:
-    #     data = np.flipud(data)
     # ==============Interpolate large linear spaces=============================
     seg_P2Plength = []
     cumm_length = 0
@@ -100,76 +218,11 @@ def shp_parallel_offset(arrPts, dist, join_style=1, side="right", res=16):
             Refinement = True
         else:
             Refinement = False
-
-    # Make sure there are unique rows
-    #    if np.allclose(data[0],data[-1]):
-    #        closed = True
-    #
-    #    else:
-    #        closed = False
-    #        before = len(data)
-    #        data = unique_rows(data.round(decimals=9))
-    #        after = len(data)
-    #        if after<before:
-    #            print 'non unique elements found',len(data)
-
-    # ======PLOTTING for debugging
-    #    fig = plt.figure()
-    #    fig.add_subplot(111)
-    #    plt.clf()
-    #    plt.plot(*arrPts.T, color='black', marker='.')
-    #    plt.plot(*arrPts[0].T, color='green', marker='o')
-    #    plt.plot(*arrPts[-1].T, color='purple', marker='o')
-    #
-    #    for i, item in enumerate(arrPts):
-    #        plt.annotate(i, (item[0],item[1]), color='black')
-    #
-    #    plt.plot(*data.T, color='red', marker='.')
-    #    plt.plot(*data[0].T, color='green', marker='>')
-    #    plt.plot(*data[-1].T, color='purple', marker='>')
-    #
-    #    for i, item in enumerate(data):
-    #        plt.annotate(i, (item[0],item[1]), color='red')
-    #
-    #    plt.axis('equal')
-    #    plt.show()
-
+    # Combine close points around corners
+    data = combine_close_points(data, dist**2*100, dist*4)
     return data
 
 
 # ==============================================================================
 if __name__ == "__main__":
     exec(compile(open("SONATA.py").read(), "SONATA.py", "exec"))
-#    for i,item in enumerate(projection):
-#        timelines(0,item[0],item[1],color[int(item[2])])
-
-#    plt.figure(2)
-#    plt.plot(*arrPts.T, color='black', marker='.')
-# plt.plot(*data.T, color='red', marker='.')
-
-
-#    #Find corners and edges of original data
-#    DCT_angles1 = calc_DCT_angles(arrPts)
-#    angular_deflection = 30
-#    concave1 = []
-#    for i in range(0,DCT_angles1.shape[0]):
-#        if DCT_angles1[i] > (180 + angular_deflection):
-#            concave1.append(i)
-#    NbConcave1 = np.size(concave1)
-#
-#    for i,idx in enumerate(concave1):
-#        ConcavePt = arrPts[idx]
-#        v1 = arrPts[idx]-arrPts[idx-1]
-#        n1 = np.array([-v1[1],v1[0]])
-#        n1 = n1/np.linalg.norm(n1)
-#        P1 = ConcavePt+n1*distt
-#        v2 = arrPts[idx+1]-arrPts[idx]
-#        n2 = np.array([-v2[1],v2[0]])
-#        n2 = n2/np.linalg.norm(n2)
-#        P2 = ConcavePt+n2*dist
-#
-#        plt.plot(*P1.T, color='GREEN', marker='o')
-#        plt.plot(*P2.T, color='BLUE', marker='o')
-
-#
-#    plt.show()

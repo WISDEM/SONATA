@@ -21,11 +21,11 @@ print('Current working directory is:', os.getcwd())
 
 
 # ===== Provide Path Directory & Yaml Filename ===== #
-folder_str = os.getcwd() + '/'
+run_dir = os.path.dirname( os.path.realpath(__file__) ) + os.sep
 job_str = '0_box_beam_HT_antisym_layup_15_6_SI_SmithChopra91.yaml'  # note: for better meshing convergence, units specified in yaml are in 'mm' instead of 'm'
 job_name = 'box_beam_SmithChopra91'
 
-filename_str = folder_str + job_str
+filename_str = run_dir + job_str
 
 
 # ===== Define flags ===== #
@@ -40,6 +40,9 @@ flag_wf                 = True      # plot wire-frame
 flag_lft                = True      # plot lofted shape of blade surface (flag_wf=True obligatory); Note: create loft with grid refinement without too many radial_stations; can also export step file of lofted shape
 flag_topo               = True      # plot mesh topology
 
+# Shape of corners
+choose_cutoff = 2    # 0 step, 2 round
+
 # create flag dictionary
 flags_dict = {"flag_wt_ontology": flag_wt_ontology, "flag_ref_axes_wt": flag_ref_axes_wt,
               "attribute_str": attribute_str,
@@ -51,11 +54,8 @@ radial_stations = [0.0, 1.0]
 
 # Create job structure
 job = Blade(name=job_name, filename=filename_str, flags=flags_dict, stations=radial_stations)
-job.blade_gen_section(topo_flag=True, mesh_flag = True, split_quads=True)
+job.blade_gen_section(topo_flag=True, mesh_flag = True)
 
-# Choose between VABS or ANBAX
-# vabs_path = "/Users/rfeil/work/8_VABS/vabs_WIN/AnalySwift/VABS/VABSIII.exe"
-# job.blade_run_vabs(vabs_path)
 job.blade_run_anbax()
 
 # ===== PLOTS ===== #

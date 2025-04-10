@@ -13,9 +13,7 @@ import numpy as np
 import yaml
 
 # First party modules
-from SONATA.cbm.fileIO.read_yaml_input import clean_filestring
 from SONATA.classMaterial import find_material, read_materials
-from SONATA.vabs.classVABSConfig import VABSConfig
 from SONATA.anbax.classANBAXConfig import ANBAXConfig
 
 if __name__ == "__main__":
@@ -32,7 +30,7 @@ class CBMConfig(object):
         filename, when config filename is given.
         
     setup: dict
-        contains the following fields: input_type, datasource, material_db, 
+        contains the following fields: datasource, material_db, 
         radial_station, Theta, scale_factor, BalanceWeight and mesh_resolution
     
     webs: OrderedDict
@@ -59,24 +57,12 @@ class CBMConfig(object):
         self.setup, self.webs, self.segments, self.bw = {}, {}, {}, {}
         self.filename = ""
 
-        # The following code is commented for cleanup and may be deleted later on if really not needed any longer
-
-        # if isinstance(inputdata, str) and iea37 == False:
-        #     self.filename = inputdata
-        #     self._read_yaml_config(self.filename)
-        #
-        # elif isinstance(inputdata, dict) and iea37 == True:
-        #     yml = inputdata
-        #     self.read_cbm_yaml(yml, materials)
-
-
         if isinstance(inputdata, dict):
             yml = inputdata
             self.read_yaml_cbm(yml, materials)
         else:
             print("Input data is not a dictionary. Check yaml input file.")
 
-        self.vabs_cfg = VABSConfig()
         self.anbax_cfg = ANBAXConfig()
         self.flags = {"mesh_core": True}
 
@@ -92,7 +78,6 @@ class CBMConfig(object):
 
         # Setup:
         self.setup = {}
-        self.setup["input_type"] = 5
         self.setup["datasource"] = None
         self.setup["material_db"] = None
         self.setup["radial_station"] = None
@@ -134,9 +119,8 @@ class CBMConfig(object):
             if layerlst and all(isinstance(l, list) for l in layerlst):
                 layerlst = s.get("layup")
                 d["Layup_names"] = np.asarray(layerlst)[:, 5].tolist()
-                d["Layup"] = np.asarray(layerlst)[:, :5].astype(float)
-
-            elif layerlst and all(isinstance(l, dict) for l in layerlst):
+                d["Layup"] = np.asarray(layerlst)[:, :5].astype(float)               
+            elif layerlst and all(isinstance(l, dict) and l for l in layerlst):
                 d["Layup"] = np.asarray([[l.get("start"), l.get("end"), l.get("thickness"), l.get("orientation"), find_material(materials, "name", l.get("material_name")).id] for l in layerlst])
                 d["Layup_names"] = [l.get("name") for l in layerlst]
 
@@ -150,43 +134,6 @@ class CBMConfig(object):
         if yml.get("trim_mass"):
             self.bw = yml.get("trim_mass")  #
             self.setup["BalanceWeight"] = True
-
-
-# The following code is commented for cleanup and may be deleted later on if really not needed any longer
-
-    # def _read_yaml_config(self, fname):
-    #     """ read the CBM config file and assign class attributes
-    #
-    #     Parameters:
-    #     ----------
-    #     fname : str
-    #         filename of the yaml style cbm input configuration
-    #
-    #     """
-    #     b_string = clean_filestring(fname, comments="#")
-    #     yDict = yaml.load(b_string)
-    #     self.setup = yDict["Setup"]
-    #
-    #     if "Webs" in yDict.keys():
-    #         D = {int(k.split()[-1]): v for (k, v) in yDict["Webs"].items()}
-    #         self.webs = OrderedDict(sorted(D.items()))
-    #
-    #     # print(self.setup['BalanceWeight'])
-    #     if self.setup["BalanceWeight"] == True:
-    #         self.bw = yDict["BalanceWeight"]
-    #
-    #     # read segments:
-    #     D = {int(k.split()[-1]): v for (k, v) in yDict["Segments"].items()}
-    #
-    #     for k in D:
-    #         if D[k]["Layup"] != None:
-    #             D[k]["Layup_names"] = np.asarray(D[k]["Layup"])[:, 5].tolist()
-    #             D[k]["Layup"] = np.asarray(D[k]["Layup"])[:, :5].astype(np.float)
-    #         else:
-    #             D[k]["Layup"] = np.empty((0, 0))
-    #             D[k]["Layup_names"] = np.empty((0, 0))
-    #
-    #     self.segments = OrderedDict(sorted(D.items()))
 
 
 if __name__ == "__main__":

@@ -1,35 +1,26 @@
 # Third party modules
-import matplotlib.pyplot as plt
 import numpy as np
 from OCC.Core.gp import gp_Pnt2d
 from scipy.spatial import distance
+import matplotlib.pyplot as plt
 
 # First party modules
-from SONATA.cbm.fileIO.CADinput import order_BSplineLst_Head2Tail
 from SONATA.cbm.mesh.mesh_byprojection import \
     mesh_by_projecting_nodes_on_BSplineLst
 from SONATA.cbm.mesh.mesh_improvements import (
-    integrate_leftover_interior_nodes, modify_cornerstyle_one,
     modify_sharp_corners, second_stage_improvements,)
 from SONATA.cbm.mesh.mesh_utils import (
-    equidistant_nodes_on_BSplineLst, find_cells_that_contain_node,
-    find_node_by_ID, grab_nodes_of_cells_on_BSplineLst,
+    equidistant_nodes_on_BSplineLst,
     grab_nodes_on_BSplineLst, merge_nodes_if_too_close,
-    remove_duplicates_from_list_preserving_order, sort_and_reassignID,)
+    remove_duplicates_from_list_preserving_order,)
 from SONATA.cbm.topo.BSplineLst_utils import (BSplineLst_from_dct,
-                                              BSplineLst_Orientation,
                                               ProjectPointOnBSplineLst,
-                                              copy_BSpline, copy_BSplineLst,
+                                              copy_BSpline,
                                               discretize_BSplineLst,
-                                              find_BSplineLst_pos,
                                               findPnt_on_BSplineLst,
-                                              get_BSpline_length,
-                                              get_BSplineLst_length,
-                                              get_BSplineLst_Pnt2d,
-                                              reverse_BSplineLst,
                                               trim_BSplineLst,)
 from SONATA.cbm.topo.cutoff import cutoff_layer
-from SONATA.cbm.topo.layer_utils import get_layer, get_segment, get_web
+from SONATA.cbm.topo.layer_utils import get_layer
 from SONATA.cbm.topo.offset import shp_parallel_offset
 from SONATA.cbm.topo.para_Geom2d_BsplineCurve import (BSplineLst_from_ParaLst,
                                                       ParaLst_from_BSplineLst,)
@@ -115,53 +106,13 @@ class Layer(object):
         self.BSplineLst = BSplineLst_from_ParaLst(self.Para_BSplineLst)
         self.build_wire()
 
-    def copy(self):
-        BSplineLstCopy = copy_BSplineLst(self.BSplineLst)
-        namecopy = self.name + "_Copy"
-        LayerCopy = Layer(self.ID, BSplineLstCopy, self.globalStart, self.globalEnd, self.thickness, self.Orientation, self.MatID, namecopy)
-        return LayerCopy
-
-    def get_length(self):  # Determine and return Legth of Layer self
-        self.length = get_BSplineLst_length(self.BSplineLst)
-        return self.length
-
-    # def get_pnt2d(self,S,start,end): #Return, gp_Pnt2d of argument S of layer self
-    #    return get_BSplineLst_Pnt2d(self.BSplineLst,S,start,end)
-
-    def get_Pnt2d(self, S, LayerLst, WebLst):
-        # print self.ID
-        # print 'cum_ivLst:',self.cumA_ivLst
-        for iv in self.cumA_ivLst:
-            if iv[0] <= S < iv[1]:
-                # print 'Coordinate',S,'is on layer',int(iv[2])
-                break
-
-        print(iv[2])
-        tmp_layer = next((x for x in LayerLst if x.ID == int(iv[2])), None)
-        if not tmp_layer == None:
-            Pnt2d = get_BSplineLst_Pnt2d(tmp_layer.a_BSplineLst, S, tmp_layer.S1, tmp_layer.S2)
-        else:  # Web
-            WebID = -int(iv[2]) - 1
-            Pnt2d = get_BSplineLst_Pnt2d(WebLst[WebID].BSplineLst, S, start=WebLst[WebID].Pos2, end=WebLst[WebID].Pos1)
-
-        return Pnt2d
-
     def build_wire(self):  # Builds TopoDS_Wire from connecting BSplineSegments and returns it
         self.wire = build_wire_from_BSplineLst(self.BSplineLst)
 
-    def trim(self, S1, S2, start, end):  # Trims layer between S1 and S2
-        return trim_BSplineLst(self.BSplineLst, S1, S2, start, end)
-
-    def trim_to_coords(self, start, end):
-        self.BSplineLst = trim_BSplineLst(self.BSplineLst, self.globalStart, self.globalEnd, start, end)
-        return self.BSplineLst
-
     def build_layer(self, l0=1):
         npArray = discretize_BSplineLst(self.Boundary_BSplineLst, 1.2e-6 * l0)
-        # plt.plot(*npArray.T, '.-')
         self.offlinepts = shp_parallel_offset(npArray, self.thickness, self.join_style)
-        # plt.plot(*self.offlinepts.T, 'x-')
-        OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0)
+        OffsetBSplineLst = BSplineLst_from_dct(self.offlinepts, angular_deflection=15, tol_interp=1e-8 * l0, cutoff_style = 2)
         OffsetBSplineLst = cutoff_layer(self.Boundary_BSplineLst, OffsetBSplineLst, self.S1, self.S2, self.cutoff_style)
         self.BSplineLst = OffsetBSplineLst
 
@@ -173,7 +124,6 @@ class Layer(object):
                 unmeshed_ids.append(int(seg.LayerLst[-1].ID + 1))
 
         new_a_nodes = []
-        # print self.inverse_ivLst
         for iv_counter, iv in enumerate(self.inverse_ivLst):
             if int(iv[2]) in unmeshed_ids:  # if
                 # print iv, "equidistand nodes on BsplineLst of LayerLst entry"
@@ -224,7 +174,9 @@ class Layer(object):
         self.a_nodes = remove_duplicates_from_list_preserving_order(new_a_nodes)
         self.a_nodes = merge_nodes_if_too_close(self.a_nodes, self.a_BSplineLst, global_minLen, 0.01)
 
-    def mesh_layer(self, SegmentLst, global_minLen, proj_tol_1=9e-2, proj_tol_2=4e-1, crit_angle_1=110, alpha_crit_2=60, growing_factor=1.8, shrinking_factor=0.01, display=None, l0=None):
+    def mesh_layer(self, SegmentLst, global_minLen, proj_tol_1=9e-2, 
+                   proj_tol_2=4e-1, crit_angle_1=150, alpha_crit_2=60, 
+                   growing_factor=1.8, shrinking_factor=0.01, display=None, l0=None):
         """
         The mesh layer function discretizes the layer, which is composed of a 
         a_BsplineLst and a b_BsplineLst. Between the a_BsplineLst and the 
@@ -248,8 +200,13 @@ class Layer(object):
         proj_tol_2 = 2e-1:      tolerance value to determine a distance, 
                                 in which the resulting projection point 
                                 has to be. (modify_sharp_corners)
-        crit_angle_1 = 115:     is the critical angle to determine a corner 
-                                if 2 projection points are found.    
+        crit_angle_1 = 150:     is the critical angle to determine a corner 
+                                if 2 projection points are found.
+                                If this value is too small, can hit a case were
+                                both projections are seen as corners, but the
+                                node is not and thus the edge case is not
+                                handled and a mesh warning ultimately gets
+                                raised.
         alpha_crit_2 = 60:      is the critical angle to refine  a corner 
         growing_factor = 1.8:   critical growing factor of cell before 
                                 splitting 
@@ -285,7 +242,7 @@ class Layer(object):
 
     def set_layer_origin(self):
         """
-        this procedure reorders the self.BSplineLst to and origin if the layer 
+        this procedure reorders the self.BSplineLst to an origin if the layer 
         is closed. The Origin is detected by searching for an orthogonal 
         projection of the StartPoint of the self.Boundary_BSplineLst. If no 
         projection is found it takes the closest neighbor of the discrete 

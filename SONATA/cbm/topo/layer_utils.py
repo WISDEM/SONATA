@@ -25,24 +25,3 @@ def get_layer(lid, SegmentLst):
             print("ERROR:\t the lid:", lid, " was not found")
 
         return x
-
-
-def get_web(lid, WebLst):
-    if lid > 0:
-        print("ERROR:\t lid>0 -> refering to a layer and not a web")
-        return None
-
-    else:
-        WebID = int(-lid - 1)
-        return WebLst[WebID]
-
-
-def get_segment(lid, SegmentLst):
-
-    if lid < 0:
-        print("ERROR:\t lid<0 -> refering to a web and not a layer or a segment")
-        return None
-
-    else:
-        segid = int(lid / 1000)
-        return SegmentLst[segid]

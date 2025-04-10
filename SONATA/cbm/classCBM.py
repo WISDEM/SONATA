@@ -8,62 +8,42 @@ https://numpydoc.readthedocs.io/en/latest/format.html
 
 # Core Library modules
 import copy
-import getpass
 import math
-import os
+from collections import OrderedDict
+
 # Basic PYTHON Modules:
 import pickle as pkl
-import platform
-import subprocess
-import time
 from datetime import datetime
 
 # Third party modules
 import matplotlib.pyplot as plt
 import numpy as np
-from OCC.Core.gp import gp_Ax1, gp_Ax2, gp_Ax3, gp_Dir, gp_Pnt, gp_Trsf
-from OCC.Display.SimpleGui import init_display
+from OCC.Core.gp import gp_Ax2
 
 # First party modules
-from SONATA.cbm.bladegen.blade import Blade
 from SONATA.cbm.cbm_utl import trsf_sixbysix
 from SONATA.cbm.classBeamSectionalProps import BeamSectionalProps
 from SONATA.cbm.classCBMConfig import CBMConfig
 from SONATA.cbm.display.display_mesh import plot_cells
-from SONATA.cbm.display.display_utils import (display_config,
-                                              display_custome_shape,
-                                              display_SONATA_SegmentLst,
-                                              export_to_BMP, export_to_JPEG,
-                                              export_to_PNG, export_to_TEX,
-                                              export_to_TIFF,
-                                              show_coordinate_system,
-                                              transform_wire_2to3d,)
-from SONATA.cbm.fileIO.CADinput import import_2d_stp, import_3d_stp, load_3D
-from SONATA.cbm.fileIO.CADoutput import export_to_step
 from SONATA.cbm.mesh.cell import Cell
 from SONATA.cbm.mesh.consolidate_mesh import consolidate_mesh_on_web
-from SONATA.cbm.mesh.mesh_core import gen_core_cells
-from SONATA.cbm.mesh.mesh_intersect import map_mesh_by_intersect_curve2d
 from SONATA.cbm.mesh.mesh_utils import (grab_nodes_of_cells_on_BSplineLst,
-                                        merge_nodes_if_too_close,
                                         sort_and_reassignID,)
 from SONATA.cbm.mesh.node import Node
-from SONATA.cbm.topo.BSplineLst_utils import (BSplineLst_from_dct,
-                                              get_BSplineLst_length,
-                                              set_BSplineLst_to_Origin,)
+from SONATA.cbm.topo.BSplineLst_utils import (get_BSplineLst_length,)
 from SONATA.cbm.topo.segment import Segment
 from SONATA.cbm.topo.utils import getID
 from SONATA.cbm.topo.web import Web
 from SONATA.cbm.topo.weight import Weight
-from SONATA.cbm.topo.wire_utils import (discretize_wire, get_wire_length,
-                                        rotate_wire, scale_wire,
-                                        translate_wire, trsf_wire,)
 from SONATA.vabs.classStrain import Strain
 from SONATA.vabs.classStress import Stress
+from SONATA.cbm.topo.projection import (
+    chop_interval_from_layup, sort_layup_projection,)
 # from SONATA.vabs.classVABSConfig import VABSConfig
-from SONATA.vabs.failure_criteria import (hashin_2D, maxstrain_2D,
-                                          maxstress_2D, tsaiwu_2D, von_Mises,)
-from SONATA.vabs.vabs_utl import export_cells_for_VABS
+from SONATA.classMaterial import IsotropicMaterial, OrthotropicMaterial
+
+from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
+from OCC.Core.gp import gp_Pnt2d
 
 try:
     import dolfin as do
@@ -101,31 +81,7 @@ class CBM(object):
         outer curve.  
 
     Methods
-    -------
-    cbm_save(output_filename=None)
-         saves the complete cbm instance as pickle
-    
-    cbm_load(input_filename=None)
-        loads the complete cbm instance from pickle
-    
-    cbm_save_topo(output_filename=None)
-        saves the topology (SegmentLst, WebLst, and BW) as pickle
-        
-    cbm_load_topo(input_filename=None)
-        loads the topology (SegmentLst, WebLst, and BW) from pickle
-        
-    cbm_save_mesh(output_filename=None)
-        saves the mesh (self.mesh) as pickle
-        
-    cbm_load_mesh(input_filename=None)
-        loads the mesh (self.mesh) as pickle
-        
-    cbm_save_res(output_filename=None)
-        saves the configuration and the VABS BeamProperties results as pickle
-    
-    cbm_load_res(input_filename=None)
-        saves the configuration and the VABS BeamProperties results from pickle
-        
+    -------     
     cbm_stpexport_topo(export_filename=None)
         exports all Layer wires and the Segment0 Boundary Wire as .step
        
@@ -224,210 +180,13 @@ class CBM(object):
         self.surface3d = None  # TODO: Remove definition and set it up in classBlade
         self.Blade = None  # TODO: Remove definition and set it up in classBlade
 
-        if self.config.setup["input_type"] == 3:
-            self.surface3d = load_3D(self.config.setup["datasource"])
+        # wire = kwargs.get('wire') #in the blade reference frame!
+        self.Ax2 = kwargs.get("Ax2")
+        self.BoundaryBSplineLst = kwargs.get("BSplineLst")
+        self.Theta = 0
+        self.refL = get_BSplineLst_length(self.BoundaryBSplineLst)
 
-        elif self.config.setup["input_type"] == 4:
-            self.blade = Blade(self.config.setup["datasource"])
-            self.surface3d = self.blade.surface
-
-        elif self.config.setup["input_type"] == 5:
-            # wire = kwargs.get('wire') #in the blade reference frame!
-            self.Ax2 = kwargs.get("Ax2")
-            self.BoundaryBSplineLst = kwargs.get("BSplineLst")
-            self.Theta = 0
-            self.refL = get_BSplineLst_length(self.BoundaryBSplineLst)
-
-    def __getstate__(self):
-        """Return state values to be pickled."""
-        return (self.config, self.materials, self.SegmentLst, self.WebLst, self.BW, self.mesh, self.BeamProperties)
-
-    def __setstate__(self, state):
-        """Restore state from the unpickled state values."""
-        (self.config, self.materials, self.SegmentLst, self.WebLst, self.BW, self.mesh, self.BeamProperties) = state
-        if self.config.setup["input_type"] == 3:
-            self.surface3d = load_3D(self.config.setup["datasource"])
-        elif self.config.setup["input_type"] == 4:
-            self.blade = Blade(self.config.setup["datasource"])
-            self.surface3d = self.blade.surface
-
-    def cbm_save(self, output_filename=None):
-        """ saves the complete CBM instance as pickle
-        
-        Parameters
-        ----------
-        output_filename : string, optional 
-            path/filename to save to.
-            The Default uses the config.filename and replaces .yml with .pkl
-        """
-        if output_filename is None:
-            output_filename = self.config.filename
-            output_filename = output_filename.replace(".yml", ".pkl")
-
-        with open(output_filename, "wb") as output:
-            pkl.dump(self, output, protocol=pkl.HIGHEST_PROTOCOL)
-        return None
-
-    def cbm_load(self, input_filename=None):
-        """ loads the complete CBM instance from pickled file
-        
-        Parameters
-        ----------
-        input_filename : string, optional 
-            path/filename of the .pkl file
-            The Default uses the config.filename and replaces .yml with .pkl
-        """
-        if input_filename is None:
-            input_filename = self.config.filename
-            input_filename = input_filename.replace(".yml", ".pkl")
-
-        with open(input_filename, "rb") as handle:
-            tmp_dict = pkl.load(handle, encoding="latin1").__dict__
-            self.__dict__.update(tmp_dict)
-        return None
-
-    def cbm_save_topo(self, output_filename=None):
-        """saves the topology (SegmentLst, WebLst, and BW) as pickle
-        
-        Parameters
-        ----------
-        output_filename : string, optional 
-            path/filename, 
-            The Default uses the config.filename and replaces .yml with .pkl
-        """
-        if output_filename is None:
-            output_filename = self.config.filename
-            output_filename = output_filename.replace(".yml", "_topo.pkl")
-
-        with open(output_filename, "wb") as output:
-            pkl.dump((self.SegmentLst, self.WebLst, self.BW), output, protocol=pkl.HIGHEST_PROTOCOL)
-        return None
-
-    def cbm_load_topo(self, input_filename=None):
-        """loads the topology (SegmentLst, WebLst, and BW) as pickle
-       
-        Parameters
-        ----------
-        input_filename : string, optional 
-            path/filename of the .pkl file
-            The Default uses the config.filename and replaces .yml with .pkl
-        """
-        if input_filename is None:
-            input_filename = self.config.filename
-            input_filename = input_filename.replace(".yml", "_topo.pkl")
-
-        with open(input_filename, "rb") as handle:
-            (self.SegmentLst, self.WebLst, self.BW) = pkl.load(handle)
-
-        # Build wires for each layer and segment
-        for seg in self.SegmentLst:
-            seg.build_wire()
-            for layer in seg.LayerLst:
-                layer.build_wire()
-        return None
-
-    def cbm_save_mesh(self, output_filename=None):
-        """saves the mesh (self.mesh) as pickle 
-        
-        Parameters
-        ----------
-        output_filename : string, optional 
-            path/filename, 
-            The default uses the config.filename and replaces .yml with 
-            _mesh.pkl
-        """
-        if output_filename is None:
-            output_filename = self.config.filename
-            output_filename = output_filename.replace(".yml", "_mesh.pkl")
-            print("STATUS:\t Saving Mesh to: ", output_filename)
-
-        with open(output_filename, "wb") as output:
-            pkl.dump(self.mesh, output, protocol=pkl.HIGHEST_PROTOCOL)
-        return None
-
-    def cbm_load_mesh(self, input_filename=None):
-        """loads the mesh (self.mesh) as pickle
-        
-        Parameters
-        ----------
-        input_filename : string, optional 
-            path/filename of the .pkl file
-            The default uses the config.filename and replaces .yml with 
-            _mesh.pkl
-        """
-
-        if input_filename is None:
-            input_filename = self.config.filename
-            input_filename = input_filename.replace(".yml", "_mesh.pkl")
-
-        with open(input_filename, "rb") as handle:
-            mesh = pkl.load(handle)
-        (self.mesh, nodes) = sort_and_reassignID(mesh)
-        return None
-
-    def cbm_save_res(self, output_filename=None):
-        """saves the configuration and the VABS BeamProperties results as 
-        pickle
-        
-        Parameters
-        ----------
-        output_filename : string, optional 
-            The default uses the config.filename and replaces .yml with 
-            _res.pkl
-        """
-
-        if output_filename is None:
-            output_filename = self.config.filename
-            output_filename = output_filename.replace(".yml", "_res.pkl")
-
-        with open(output_filename, "wb") as output:
-            pkl.dump((self.config, self.BeamProperties), output, protocol=pkl.HIGHEST_PROTOCOL)
-
-    def cbm_load_res(self, input_filename=None):
-        """saves the configuration and the VABS BeamProperties results from 
-        pickle
-        
-        Parameters
-        ----------
-        input_filename : string, optional 
-            The default uses the config.filename and replaces .yml with 
-            _res.pkl
-        """
-
-        if input_filename is None:
-            input_filename = self.config.filename
-            input_filename = input_filename.replace(".yml", "_res.pkl")
-
-        with open(input_filename, "rb") as handle:
-            (self.config, self.BeamProperties) = pkl.load(handle)
-
-    def cbm_stpexport_topo(self, export_filename=None):
-        """exports all Layer wires and the Segment0 Boundary Wire as .step
-        
-        Parameters
-        ----------
-        export_filename : string, optional 
-            The default uses the config.filename and replaces .yml with 
-            .stp
-            
-        Notes
-        ----------
-        If the results are imported into CATIA or a similar CAD software they 
-        are not smooth. Future improvements are needed.
-        """
-
-        if export_filename is None:
-            export_filename = self.config.filename
-            export_filename = export_filename.replace(".yml", ".stp")
-
-        self.exportLst.append(self.SegmentLst[0].wire)
-        for seg in self.SegmentLst:
-            for layer in seg.LayerLst:
-                self.exportLst.append(layer.wire)
-
-        print("STATUS:\t Exporting Topology to: ", export_filename)
-        export_to_step(self.exportLst, export_filename)
-        return None
+        self.cutoff_style = kwargs.get("cutoff_style")
 
     def _cbm_generate_SegmentLst(self, **kwargs):
         """
@@ -440,43 +199,65 @@ class CBM(object):
         # TODO cleanup this mess!
         for k, seg in self.config.segments.items():
             if k == 0:
-                if self.config.setup["input_type"] == 0:  # 0) Airfoil from UIUC Database  --- naca23012
-                    self.SegmentLst.append(Segment(k, **seg, **self.config.setup, OCC=False, airfoil=self.config.setup["datasource"]))
 
-                elif self.config.setup["input_type"] == 1:  # 1) Geometry from .dat file --- AREA_R250.dat
-                    self.SegmentLst.append(Segment(k, **seg, **self.config.setup, OCC=False, filename=self.config.setup["datasource"]))
-
-                elif self.config.setup["input_type"] == 2:  # 2)2d .step or .iges  --- AREA_R230.stp
-                    BSplineLst = import_2d_stp(self.config.setup["datasource"], self.config.setup["scale_factor"], self.config.setup["Theta"])
-                    self.SegmentLst.append(Segment(k, **seg, **self.config.setup, OCC=True, Boundary=BSplineLst))
-
-                elif self.config.setup["input_type"] == 3:  # 3)3D .step or .iges and radial station of crosssection --- AREA_Blade.stp, R=250
-                    BSplineLst = import_3d_stp(self.config.setup["datasource"], self.config.setup["radial_station"], self.config.setup["scale_factor"], self.config.setup["Theta"])
-                    self.SegmentLst.append(Segment(k, **seg, **self.config.setup, OCC=True, Boundary=BSplineLst))
-
-                elif self.config.setup["input_type"] == 4:  # 4)generate 3D-Shape from twist,taper,1/4-line and airfoils, --- examples/UH-60A, R=4089, theta is given from twist distribution
-                    BSplineLst = self.blade.get_crosssection(self.config.setup["radial_station"], self.config.setup["scale_factor"])
-                    self.SegmentLst.append(Segment(k, **seg, Theta=self.blade.get_Theta(self.config.setup["radial_station"]), OCC=True, Boundary=BSplineLst))
-
-                elif self.config.setup["input_type"] == 5:  # 5) yaml dictionary formulation, everything is passed internally!
-                    self.SegmentLst.append(Segment(k, **seg, Theta=self.Theta, OCC=True, Boundary=self.BoundaryBSplineLst))
-
-                else:
-                    print("ERROR:\t WRONG input_type")
+                self.SegmentLst.append(Segment(k, **seg, Theta=self.Theta, OCC=True, Boundary=self.BoundaryBSplineLst))
 
             else:
-                if self.config.setup["input_type"] == 4:
-                    self.SegmentLst.append(Segment(k, **seg, Theta=self.blade.get_Theta(self.config.setup["radial_station"])))
-
-                elif self.config.setup["input_type"] == 5:
-                    self.SegmentLst.append(Segment(k, **seg, Theta=self.Theta))
-
-                else:
-                    self.SegmentLst.append(Segment(k, **seg, **self.config.setup))
+                self.SegmentLst.append(Segment(k, **seg, Theta=self.Theta))
 
         sorted(self.SegmentLst, key=getID)
         self.refL = get_BSplineLst_length(self.SegmentLst[0].BSplineLst)
         return None
+    
+    def find_bspline_ends(self, bspline):
+        start_point = gp_Pnt2d()
+        end_point = gp_Pnt2d()
+        bspline.D0(bspline.FirstParameter(), start_point)
+        bspline.D0(bspline.LastParameter(), end_point)
+        return start_point, end_point
+
+    def check_bspline_intersections(self, Boundary_BSplineLst):
+        # Checking for bspline intersections in a bspline list not including start and end points
+        start_tol = 1e-5
+        intersection_points = []
+        intersected = False
+        for i in range(len(Boundary_BSplineLst)):
+            for j in range(len(Boundary_BSplineLst)):
+                if i != j:
+                    start1, end1 = self.find_bspline_ends(Boundary_BSplineLst[i])
+                    start2, end2 = self.find_bspline_ends(Boundary_BSplineLst[j])
+                    intersector = Geom2dAPI_InterCurveCurve(Boundary_BSplineLst[i],Boundary_BSplineLst[j])
+                    if intersector.NbPoints() > 0:
+                        for k in range(1, intersector.NbPoints()+1):
+                            if not intersector.Point(k).IsEqual(start1, start_tol) and not intersector.Point(k).IsEqual(end1, start_tol) and not intersector.Point(k).IsEqual(start2, start_tol) and not intersector.Point(k).IsEqual(end2, start_tol):
+                                intersected = True
+                                intersection_points.append(intersector.Point(k))
+        return [intersected, intersection_points]
+    
+    def display_bsplinelst(self, bsplinelst, color = 'blue'):
+        for bspline in bsplinelst:
+            u_min, u_max = bspline.FirstParameter(), bspline.LastParameter()
+            # Extract points for plotting
+            num_points = 100  # Number of points to plot
+            u_values = [u_min + (u_max - u_min) * i / (num_points - 1) for i in range(num_points)]
+            x_values = [bspline.Value(u).X() for u in u_values]
+            y_values = [bspline.Value(u).Y() for u in u_values]
+            plt.plot(x_values, y_values, color = color)
+
+    def check_for_bspline_intersections(self, segment):
+        # Getting all boundary Bsplines
+        ivLst = chop_interval_from_layup(segment.boundary_ivLst, 0, 1)
+        ivLst = sort_layup_projection([ivLst])[0]
+        # Creating reference layer from the chopped ivLst
+        Boundary_BSplineLst = segment.ivLst_to_BSplineLst(ivLst)
+        [intersected, intersection_pnt] = self.check_bspline_intersections(Boundary_BSplineLst)
+        if intersected:
+            print("WARNING: There is an intersection in the structure.")
+            plt.figure()
+            self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
+            self.display_bsplinelst(Boundary_BSplineLst, 'blue')
+            for points in intersection_pnt:
+                plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
 
     def cbm_gen_topo(self, **kwargs):
         """
@@ -491,8 +272,9 @@ class CBM(object):
         self._cbm_generate_SegmentLst(**kwargs)
         # Build Segment 0:
         self.SegmentLst[0].build_wire()
-        self.SegmentLst[0].build_layers(l0=self.refL, **kwargs)
+        self.SegmentLst[0].build_layers(l0=self.refL, cutoff_style = self.cutoff_style, **kwargs)
         self.SegmentLst[0].determine_final_boundary()
+        self.check_for_bspline_intersections(self.SegmentLst[0])
 
         # Build Webs:
         self.WebLst = []
@@ -508,8 +290,9 @@ class CBM(object):
                 seg.Segment0 = self.SegmentLst[0]
                 seg.WebLst = self.WebLst
                 seg.build_segment_boundary_from_WebLst(self.WebLst, self.SegmentLst[0])
-                seg.build_layers(self.WebLst, self.SegmentLst[0], l0=self.refL)
+                seg.build_layers(self.WebLst, self.SegmentLst[0], l0=self.refL, cutoff_style = self.cutoff_style)
                 seg.determine_final_boundary(self.WebLst, self.SegmentLst[0])
+                self.check_for_bspline_intersections(seg)
                 seg.build_wire()
 
         self.BW = None
@@ -567,7 +350,6 @@ class CBM(object):
         # ===================MESH SEGMENT
         for j, seg in enumerate(reversed(self.SegmentLst)):
             self.mesh.extend(seg.mesh_layers(self.SegmentLst, global_minLen, self.WebLst, display=self.display, l0=self.refL))
-            # mesh,nodes = sort_and_reassignID(mesh)
 
         # ===================MESH CORE
         if self.config.flags["mesh_core"]:
@@ -577,6 +359,8 @@ class CBM(object):
                 # print(core_cell_area)
                 self.mesh.extend(seg.mesh_core(self.SegmentLst, self.WebLst, core_cell_area, display=self.display))
 
+
+
         # ===================consolidate mesh on web interface
         for web in self.WebLst:
             #print web.ID,  'Left:', SegmentLst[web.ID].ID, 'Right:', SegmentLst[web.ID+1].ID,
@@ -585,209 +369,182 @@ class CBM(object):
             (web.wr_nodes, web.wr_cells) = grab_nodes_of_cells_on_BSplineLst(self.SegmentLst[web.ID+1].cells, web.BSplineLst)
 
             if not web.wl_nodes or not web.wl_cells or not web.wr_nodes or not web.wr_cells:  # in case there was no mesh in a segment
-                print('STATUS:\t No mesh on Web Interface ' + str(web.ID) + ' to be consolodated')
+                print('STATUS:\t No mesh on Web Interface ' + str(web.ID) + ' to be consolodated.')
+
+                # This message gets printed in cases where the web doesn't get
+                # meshed because there is no isotropic layer.
+                # However, may also get printed in other cases.
+                # There are no other warnings printed about not having
+                # an isotropic core on webs.
+                print('STATUS:\t If web does not appear, ensure that webs have isotropic core layer.')
             else:
                 newcells = consolidate_mesh_on_web(web, web_consolidate_tol, self.display)
                 self.mesh.extend(newcells)
+
+
+        print("STATUS:\t Splitting Quads into Trias")
+        tmp = []
+        for c in self.mesh:
+            tmp.extend(c.split_quads())
+        self.mesh = tmp
         
-        #=====================split quad cells into trias:
-        if split_quads == True:
-            print("STATUS:\t Splitting Quads into Trias")
-            tmp = []
-            for c in self.mesh:
-                tmp.extend(c.split_quads())
-            self.mesh = tmp
-
-        # ============= BALANCE WEIGHT - CUTTING HOLE ALGORITHM
-        if self.config.setup["BalanceWeight"] == True:
-            print("STATUS:\t Meshing Balance Weight")
-
-            self.mesh, boundary_nodes = map_mesh_by_intersect_curve2d(self.mesh, self.BW.Curve, self.BW.wire, global_minLen)
-            # boundary_nodes = merge_nodes_if_too_close(boundary_nodes,self.BW.Curve,global_minLen,tol=0.05))
-            [bw_cells, bw_nodes] = gen_core_cells(boundary_nodes, bw_cell_area)
-
-            for c in bw_cells:
-                c.structured = False
-                c.theta_3 = 0
-                c.MatID = self.config.bw["Material"]
-                c.calc_theta_1()
-
-            self.mesh.extend(bw_cells)
-
         # invert nodes list of all cell to make sure they are counterclockwise for vabs in the right coordinate system!
         for c in self.mesh:
             if c.orientation == False:
                 c.invert_nodes()
         (self.mesh, nodes) = sort_and_reassignID(self.mesh)
-        return None
+        
+        # Mesh cleanup
+        # 1. Identify all nodes with exact repeated coordinates
+        # (tolerance 1e-14)
+        # 2. Keep only the lower number node and replace all cells node entries
+        # as needed
+        # Redo the sort and reassignID call
+        
+        # Find number of nodes
+        n_nodes = 0
+        
+        for cell_i in self.mesh:
+            n_nodes = np.maximum(n_nodes, np.max([n.id for n in cell_i.nodes]))
 
-    def cbm_review_mesh(self):
-        """
-        CBM method that prints a summary of the mesh properties to the 
-        screen 
-        """
-
-        print("STATUS:\t Review Mesh:")
-        print("\t   - Total Number of Cells: %s" % (len(self.mesh)))
-        print("\t   - Duration: %s" % (datetime.now() - self.startTime))
-        # print '\t   - Saved as: %s' % filename
-        minarea = min([c.area for c in self.mesh])
-        print("\t   - smallest cell area: %s" % minarea)
-        minimum_angle = min([c.minimum_angle for c in self.mesh])
-        print("\t   - smallest angle [deg]: %s" % minimum_angle)
-        # orientation = all([c.orientation for c in mesh])
-        # print '\t   - Orientation [CC]: %s' % orientation
-
-        return None
-
-    def cbm_run_vabs(self, jobid=None, rm_vabfiles=True, ramdisk=False, vabs_path = 'VABSIII'):
-        """CBM method to run the solver VABS (Variational Asymptotic Beam 
-        Sectional Analysis). Note that this method is designed to work if 
-        VABSIII is set in the PATH variable. For Users at the TUM-HT please load 
-        the vabs module beforehand.
+        node_coords = np.full((n_nodes+1, 2), np.nan)
+        node_list = (n_nodes+1)* [None]
+        
+        for ind,cell_i in enumerate(self.mesh):
+            for n in cell_i.nodes:
+                node_coords[n.id] = [n.Pnt2d.X(), n.Pnt2d.Y()]
+                node_list[n.id] = n
+        
+        same_coords = (n_nodes+1)* [[]]
+        
+        for ind in range(node_coords.shape[0]):
+            
+            same_coords[ind] = np.where(np.linalg.norm(node_coords
+                                       - node_coords[ind], axis=1) < 1e-14)[0]
+        
+        reduced_sets = [group for group in same_coords if group.shape[0]>1]
+        
+        node_sets = len(reduced_sets)*[None]
+        set_inds = 0
                 
+        for curr in reduced_sets:
+            
+            added = False
+            
+            for i in range(set_inds):
+                if np.intersect1d(curr, node_sets[i]).shape[0] > 0:
+                    added=True
+                    node_sets[i] = np.unique(np.hstack((node_sets[i], curr)))
+            
+            if not added:
+                node_sets[set_inds] = curr
+                set_inds += 1
+                
+        node_sets = node_sets[:set_inds]
+        # WARNING: It could be possible that a node is in multiple node sets.
+        # Using a large enough tolerance should limit this risk
+
+        for cell in self.mesh:
+            for i,n in enumerate(cell.nodes):
+                
+                for check_set in node_sets:
+                    if n.id in check_set:
+                        cell.nodes[i] = node_list[check_set[0]]
+        
+        # remove any cell that has repeated nodes
+        remove_inds = []
+        
+        for ind,cell in enumerate(self.mesh):
+            nodes = [n.id for n in cell.nodes]
+            
+            _,counts = np.unique(nodes, return_counts=True)
+            if counts.max() > 1:
+                remove_inds += [ind]
+        
+        if len(remove_inds) > 0:
+            print("Removing Cells with repeated nodes.")
+            
+            self.mesh = [cell
+                         for i, cell in enumerate(self.mesh)
+                         if i not in remove_inds]
+        
+        (self.mesh, nodes) = sort_and_reassignID(self.mesh)
+        
+        return None
+
+    def cbm_custom_mesh(self, nodes, cells, materials, split_quads=True,
+                        theta_11=None, theta_3=None):
+        """
+        Give a custom mesh to the section model.
+
         Parameters
         ----------
-        jobid : string, optional
-                assign a unique ID for the job. If no jobid is assigned the 
-                isoformat of datetime with microseconds is used
-        rm_vabfiles : bool, optional
-                removes VABS files after the calculation is completed and 
-                the results are stored.
-        ramdisk : bool, optional, 
-            Instead of storing the writing and reading the vabs job directory, 
-            the ramdisk "/tmpfs/username" is used. This options is currently 
-            designed for linux users make sure to mount it beforehand with to 
-            assign 200MB of Memory to the virtual drive.
-            >>> sudo mount -t tmpfs -o size=200M none /tmpfs/username
-            
+        nodes : (N, 2) numpy.ndarray
+            Coordinates of each node. First column is x, second is y.
+        cells : (M, 4) numpy.ndarray
+            List of nodes for each element.
+            Element orientation is set based on the vector between nodes
+            indexed 1 and 2.
+        materials : length N list
+            Material for each cell.
+        split_quads : bool, optional
+            Flag for if quad elements should be split into triangles after
+            reading the custom mesh.
+        theta_3 : float, optional
+            Value for fiber orientation angle to be passed down into SONATA
+            and ANBA. If None, then zero is passed down. Units are degrees.
+            The default value is None.
+
         Returns
-        ----------
-        None : everything is stored within the CBM instance
+        -------
+        None.
         
-        Examples
-        ----------
-        >>> job.cbm_run_vabs(rm_vabfiles=True, ramdisk=True)
+        Notes
+        -----
+        
+        Cannot currently set the ply orientation except by ordering the
+        cell nodes appropriately for the cell orientation.
 
         """
-        (self.mesh, nodes) = sort_and_reassignID(self.mesh)
-
-        if jobid == None:
-            s = datetime.now().isoformat(sep="_", timespec="microseconds")
-            jobid = s.replace(":", "").replace(".", "")
-        fstring = "_" + jobid + ".vab"
-
-        if ramdisk == True:
-            rm_vabfiles = True
-            if os.path.exists("/tmpfs"):
-                user = getpass.getuser()
-                path = "/tmpfs/" + user
-                if not os.path.exists(path):
-                    os.makedirs(path)
-                # tmp = path+'/'+self.config.filename.split('/')[-1]
-                vabs_filename = path + "/" + self.name + fstring
-
-            else:
-                user = getpass.getuser()
-                path = "/scratch/" + user
-                print(path)
-                if not os.path.exists(path):
-                    os.makedirs(path)
-                # tmp = path+'/'+self.config.filename.split('/')[-1]
-                vabs_filename = path + "/" + self.name + fstring
-                print('WARNING: ramdisk directory "/tmpfs" does not exist! -> running on /scratch')
-
-        elif self.config.filename == "":
-            vabs_filename = self.name + fstring
-
-        else:
-            print('config_filename')
-            vabs_filename = self.config.filename.replace('.yml', fstring)
         
-        print('STATUS:\t Running VABS for constitutive modeling:')
-        if platform.system() == 'Linux' or platform.system() == 'Windows':
-            cmd = [vabs_path, vabs_filename]
-            
-        elif  platform.system() == 'Darwin':
-            cmd = ['wine', vabs_path, vabs_filename]
-            
-        #print('vabs_fname',vabs_filename)
-        result = None
-        counter = 0
-        stdout = ""
-        while result is None and counter < 1000:
-            # EXECUTE VABS:
-            try:
-                if self.config.vabs_cfg.recover_flag == 1:
-                    self.config.vabs_cfg.recover_flag = 0
-                    export_cells_for_VABS(self.mesh, nodes, vabs_filename, self.config.vabs_cfg, self.materials)
-                    stdout = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode("utf-8")
-                    self.config.vabs_cfg.recover_flag = 1
-                    export_cells_for_VABS(self.mesh, nodes, vabs_filename, self.config.vabs_cfg, self.materials)
-                    print("STATUS:\t Running VABS for 3D Recovery:")
-                    stdout = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode("utf-8")
-
-                else:
-                    export_cells_for_VABS(self.mesh, nodes, vabs_filename, self.config.vabs_cfg, self.materials)
-                    stdout = subprocess.run(cmd, stdout=subprocess.PIPE).stdout.decode('utf-8')
-                    subprocess.call(cmd, shell=True)
-
-                stdout = stdout.replace('\r\n\r\n','\n\t   -')
-                stdout = stdout.replace('\r\n','\n\t   -')
-                stdout = stdout.replace('\n\n','\n\t   -')
-                stdout = stdout[:-2]
-
-                if " VABS finished successfully" in stdout:
-                    stdout = "STATUS:\t VABS Calculations Completed: \n\t   -" + stdout
-                else:
-                    stdout = "ERROR:\t VABS Calculations Incomplete: \n\t   -" + stdout
-
-                # print('STATUS:\t Total Elapsed Time: %s' % (datetime.now() - self.startTime))
-                print(stdout)
-                # VABS Postprocessing:
-                result = BeamSectionalProps(vabs_filename + ".K")
-            except Exception as e:
-                if 'All "vabsiii" licenses in us' in stdout or "Something wrong with the license file" in stdout:
-                    time.sleep(2)
-                    counter += 1
-                else:
-                    print(e)
-                    break
-
-        self.BeamProperties = result
+        if theta_3 is None:
+            theta_3 = 0
         
-        if self.config.vabs_cfg.recover_flag == 1:
-            self.BeamProperties.read_all_VABS_Results(filename=vabs_filename)
-            #ASSIGN Stress and strains to elements:
-            for i,c in enumerate(self.mesh):
-                c.strain = Strain(self.BeamProperties.ELE[i][1:7])
-                c.stress = Stress(self.BeamProperties.ELE[i][7:13])
-                c.strainM = Strain(self.BeamProperties.ELE[i][13:19])
-                c.stressM = Stress(self.BeamProperties.ELE[i][19:25])
-
-            # ASSIGN Displacement U to nodes:
-            for i, n in enumerate(nodes):
-                n.displacement = self.BeamProperties.U[i][3:6]
-            
-            #Calculate standart failure criterias
-            # self.cbm_calc_failurecriteria()
+        # Generate node list, do not need to explicitly save since each cell
+        # saves its own nodes.
+        node_list = nodes.shape[0] * [None]
         
-        #print(vabs_filename)
-        #REMOVE VABS FILES:
-        if rm_vabfiles:
-            folder = "/".join(vabs_filename.split("/")[:-1])
-            fstring = vabs_filename.split("/")[-1]
-            if not folder:
-                folder = None
-
-            for file in os.listdir(folder):
-                if fstring in file:
-                    # print('removing: '+folder+'/'+file)
-                    if folder:
-                        os.remove(folder + "/" + file)
-                    else:
-                        os.remove(file)
-
+        for ind in range(nodes.shape[0]):
+            
+            node_list[ind] = Node(gp_Pnt2d(nodes[ind, 0], nodes[ind, 1]),
+                                  ['Custom Layer', ind, 0])
+            
+        self.mesh = cells.shape[0] * [None]
+        
+        for ind in range(cells.shape[0]):
+            
+            c = Cell([node_list[nind] for nind in cells[ind]])
+            
+            if c.orientation == False:
+                c.invert_nodes()
+            
+            c.calc_theta_1()
+            c.theta_3 = theta_3
+            c.MatID = int(materials[ind])
+            c.structured = True
+            
+            if theta_11 is not None:
+                c.theta_1[0] = theta_11[ind]
+            
+            self.mesh[ind] = c
+        
+        if split_quads:
+            print("STATUS:\t Splitting Quads into Trias")
+            tmp = []
+            for c in self.mesh:
+                tmp.extend(c.split_quads())
+            self.mesh = tmp
+        
         return None
 
     def cbm_run_anbax(self):
@@ -819,7 +576,7 @@ class CBM(object):
         except:
             print('\n')
             print('==========================================\n\n')
-            print('Error, Anba4 wrapper called, but ')
+            print('Error, Anba4 wrapper called, likely ')
             print('Anba4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
 
@@ -860,181 +617,253 @@ class CBM(object):
 
         return
 
-    def cbm_calc_failurecriteria(self, criteria="tsaiwu_2D", iso_criteria="nocriteria"):
+
+    def cbm_run_viscoelastic(self, test_elastic=True, test_tau0=True):
         """
-        Applies the selected failure criteria for all cells. It is necessary 
-        that the strains and stresses are calculated for all cells and the 
-        strength characteristics are defined for the used materials
-    
-        
-        Notes
-        ----------
-        'von_Mises' can only be applied for isotropic materials and the others
-        can only be applied for orthotropic materials
-        
-        
-        Parameters
-        ----------
-        criteria : string
-            current options are: 'tsaiwu_2D', 'maxstress_2D', 'maxstrain_2D',
-            'hashin_2D', 'von_Mises'
-                
-        """
-
-        for c in self.mesh:
-            sf = 99
-            mode = "nocriteria"
-            mat = self.materials[c.MatID]
-
-            if mat.orth == 0:
-                if iso_criteria == "von_Mises":
-                    (sf, mode) = von_Mises(mat, c.stressM, c.strainM)
-
-            if mat.orth == 1:
-                if criteria == "tsaiwu_2D":
-                    (sf, mode) = tsaiwu_2D(mat, c.stressM, c.strainM)
-                elif criteria == "maxstress_2D":
-                    (sf, mode) = maxstress_2D(mat, c.stressM, c.strainM)
-                elif criteria == "maxstrain_2D":
-                    (sf, mode) = maxstrain_2D(mat, c.stressM, c.strainM)
-                elif criteria == "hashin_2D":
-                    (sf, mode) = hashin_2D(mat, c.stressM, c.strainM)
-
-            c.sf = sf
-            c.failure_mode = mode
-
-        return None
-
-    def cbm_post_2dmesh(self, attribute="MatID", title="NOTITLE", **kw):
-        """
-        CBM Postprocessing method that displays the mesh with matplotlib.
-        
-        Parameters
-        ----------
-        attribute : string, optional
-            Uses the string to look for the cell attributes. 
-            The default attribute is MatID. Possible other attributes can be 
-            fiber orientation (theta_3) or strains and stresses. 
-            If BeamProperties are already calculated by VABS or something
-            similar, elastic-axis, center-of-gravity... are displayed.
-        title : string, optional
-            Title to be placed over the plot.
-        **kw : keyword arguments, optional
-            are passed to the lower "plot_cells" function. Such options are: 
-            VABSProperties=None, title='None', plotTheta11=False, 
-            plotDisplacement=False, savepath
-            
-        Returns
-        ----------
-        (fig, ax) : tuple
-            figure and axis handler are returned by the method
-        
-        Examples
-        ----------
-        >>> job.cbm_post_2dmesh(title='Hello World!', attribute='theta_3', plotTheta11=True)
-
-        """
-        mesh, nodes = sort_and_reassignID(self.mesh)
-        fig, ax = plot_cells(self.mesh, nodes, attribute, self.materials, self.BeamProperties, title, **kw)
-        return fig, ax
-
-    def cbm_post_3dtopo(self):
-        """
-        CBM Postprocessing method that displays the topology with the pythonocc
-        3D viewer. If the input_type is 3 (3d *.stp + radial station) or 4 
-        (generic blade definiton) the 3D Surface is displayed, 
-        else only the 2D topology is shown.
-                
-        Notes
-        ----------
-        Be careful to set the DeviationAngle/Coeficient and scale it to the
-        prolem or else it might crash. Remeber that is is in absolute 
-        values (mm).
-        
-        """
-        (self.display, self.start_display, self.add_menu, self.add_function_to_menu) = display_config(DeviationAngle=1e-3, DeviationCoefficient=1e-3, cs_size=self.refL / 5)
-
-        # display_custome_shape(self.display,self.SegmentLst[0].wire,2,0,[0,0,0])
-
-        if self.config.setup["input_type"] == 3 or self.config.setup["input_type"] == 4:
-            # self.display.Context.SetDeviationAngle(1e-6)
-            # self.display.Context.SetDeviationCoefficient(1e-6)
-
-            display_SONATA_SegmentLst(self.display, self.SegmentLst, (self.config.setup["radial_station"], 0, 0), -math.pi / 2, -math.pi / 2)
-            self.display.DisplayShape(self.surface3d, color=None, transparency=0.7, update=True)
-
-            if self.config.setup["BalanceWeight"]:
-                transform_wire_2to3d(self.display, self.BW.wire, (self.config.setup["radial_station"], 0, 0), -math.pi / 2, -math.pi / 2)
-
-        else:
-            display_SONATA_SegmentLst(self.display, self.SegmentLst)
-            if self.config.setup["BalanceWeight"]:
-                self.display.DisplayShape(self.BW.Curve, color="BLACK")
-
-        self.display.View_Iso()
-        self.display.FitAll()
-        self.start_display()
-
-        return None
-
-    def cbm_post_3dmesh(self):
-        """
-        CBM Postprocessing method that displays the 2D mesh with the pythonocc
-        3D viewer. Similar functionality can be used when debuggin in the 
-        meshing routines. 
-        """
-
-        (self.display, self.start_display, self.add_menu, self.add_function_to_menu) = display_config(DeviationAngle=1e-6, DeviationCoefficient=1e-6, cs_size=self.refL / 5)
-        for c in self.mesh:
-            self.display.DisplayShape(c.wire, color="BLACK", transparency=0.7)
-        self.display.View_Top()
-        self.display.FitAll()
-        self.start_display()
-        return None
-
-    def cbm_exp_dymore_beamprops(self, eta, Theta=0, solver="vabs", units={"mass": "kg", "length": "m", "force": "N"}):
-        """
-        Converts the Units of CBM to DYMORE/PYMORE/MARC units and returns the 
-        array of the beamproperties with Massterms(6), Stiffness(21), 
-        damping(1) and curvilinear coordinate(1)
-
-        Parameters
-        ----------
-        
-        eta : float, 
-            is the beam curvilinear coordinate of the beam from 0 to 1. 
-        
-        Theta: float
-            is the angle of rotation of the coordinate system in "radians"
+        Calculation of viscoelastic 6x6 matrices at the section.
 
         Returns
-        ----------
-        arr : ndarray
-            [Massterms(6) (m00, mEta2, mEta3, m33, m23, m22) 
-            Stiffness(21) (k11, k12, k22, k13, k23, k33,... k16, k26, ...k66)
-            Viscous Damping(1) mu, Curvilinear coordinate(1) eta]
-            
-            
-        Notes
-        ----------
-        - Unit Convertion takes sooo much time. Commented out for now!
-        
+        -------
+        None.
+
         """
-        if solver == "vabs" or solver == "anbax":
-            if Theta != 0:
-                tmp_bp = self.BeamProperties.rotate(Theta)
+
+        self.mesh, nodes = sort_and_reassignID(self.mesh)
+
+        try:
+            (mesh, matLibrary, materials, plane_orientations,
+             fiber_orientations, maxE) = build_dolfin_mesh(self.mesh,
+                                                       nodes, self.materials)
+        except:
+            print('\n')
+            print('==========================================\n\n')
+            print('Error, Anba4 wrapper called, likely ')
+            print('Anba4 _or_ Dolfin are not installed\n\n')
+            print('==========================================\n\n')
+
+
+        # Call ANBAX with baseline properties
+        anba = anbax(mesh, 1, matLibrary, materials, plane_orientations,
+                     fiber_orientations, maxE)
+        
+        tmp_TS = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
+        tmp_MM = anba.inertia().getValues(range(6),range(6))    # get mass matrix
+
+        # Define transformation T (from ANBA to SONATA/VABS coordinates)
+        B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
+        T = np.dot(np.identity(3), np.linalg.inv(B))
+
+        self.BeamProperties = BeamSectionalProps()
+        self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
+        self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
+
+        # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
+        self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
+        self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+
+        # Recover the mapping from sectional Forces and Moments to Strain
+        # in a non-invasive way from ANBA
+        
+        # 1. Initialize memory on each element to store the mapping
+        # ASSIGN stresses and strains to mesh elements:
+        for i,c in enumerate(self.mesh):
+            
+            c.fm_to_strain = np.zeros((6,6))
+        
+        # 2. Call ANBA looping over unit forces/moments
+        for i in range(6):
+            
+            F = [0.0, 0.0, 0.0]
+            M = [0.0, 0.0, 0.0]
+            
+            if i < 3:
+                F[i] = 1.0
             else:
-                tmp_bp = self.BeamProperties
+                M[i - 3] = 1.0
+            
+            # This ends up being potentially excessively slow since
+            # it does a new calculation for each stress and strain field (4),
+            # but only need the global coordinate strain field.
+            [tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran] = \
+                anbax_recovery(anba, len(self.mesh), F, M,
+                               self.config.anbax_cfg.voigt_convention, T)
+        
+        
+            # 3. Store Strain results in each case / element
+            for j,c in enumerate(self.mesh):
+            
+                # This creates a Strain class object that clearly identifies
+                # elasticity strain tensor components (epsilon) versus
+                # engineering shear strain components (gamma).
+                # While is is probably unneccesary for computation, it is done for
+                # code clarity.
+                curr_strain = Strain([tmp_StrainF_tran[j,0,0],
+                                      tmp_StrainF_tran[j,0,1],
+                                      tmp_StrainF_tran[j,0,2],
+                                      tmp_StrainF_tran[j,1,1],
+                                      tmp_StrainF_tran[j,1,2],
+                                      tmp_StrainF_tran[j,2,2]])
 
-        else:
-            print("Check solver for Dymore Beam Property input.")
+                c.fm_to_strain[:, i] = np.array([curr_strain.epsilon11,
+                                                 curr_strain.epsilon22,
+                                                 curr_strain.epsilon33,
+                                                 curr_strain.gamma23,
+                                                 curr_strain.gamma13,
+                                                 curr_strain.gamma12])
 
+        # 4. Create a material dictionary for each time scale.
+        #    The will loop over those time scales
+        time_scale_list = []
+        
+        for MatID in self.materials:
+            time_scale_list += self.materials[MatID]\
+                                    .viscoelastic['time_scales_v'].tolist()
+        
+        time_scale_list = np.sort(np.unique(time_scale_list)).tolist()
+        
+        time_scale_mat_dicts = len(time_scale_list) * [None]
+        
+        # breakpoint()
+        
+        for i, tau in enumerate(time_scale_list):
+            
+            curr_materials = OrderedDict()
+            
+            for MatID in self.materials:
+                
+                mat = self.materials[MatID]
+                
+                if hasattr(mat, 'viscoelastic'):
+                    found_time_scale = tau in mat.viscoelastic['time_scales_v'].tolist()
+                else:
+                    found_time_scale = False
+                
+                if not found_time_scale:
+                    # Set material as isotropic with no stiffness
+                    # nu value is irrelevant since E=0.0
+                    curr_dict = {'nu' : 0.0,
+                                 'E'  : 0.0}
+                    
+                    curr_materials[MatID] = IsotropicMaterial(ID=MatID,
+                                                                **curr_dict)
+                else:
+                    # find index of time scale
+                    time_scale_ind = np.argmax(tau 
+                                          == mat.viscoelastic['time_scales_v'])
+                
+                if found_time_scale and mat.orth == 0:
+                    
+                    curr_dict = {'E' : mat.viscoelastic['E_v'][time_scale_ind],
+                                 'nu' : mat.nu,
+                                 'name' : mat.name + ' time scale : {}'.format(tau)}
 
-        MM = tmp_bp.MM
-        MASS = np.array([MM[0, 0], MM[2, 3], MM[0, 4], MM[5, 5], MM[4, 5], MM[4, 4]])
-        STIFF = tmp_bp.TS[np.tril_indices(6)[1], np.tril_indices(6)[0]]
-        mu = 0.0
-        return np.hstack((MASS, STIFF, mu, eta))
+                    curr_materials[MatID] = IsotropicMaterial(ID=MatID,
+                                                                **curr_dict)
+                elif found_time_scale and mat.orth == 1:
+                    
+                    curr_dict = {'E_1' : mat.viscoelastic['E_1_v'][time_scale_ind],
+                                 'E_2' : mat.viscoelastic['E_2_v'][time_scale_ind],
+                                 'E_3' : mat.viscoelastic['E_3_v'][time_scale_ind],
+                                 'G_12' : mat.viscoelastic['G_12_v'][time_scale_ind],
+                                 'G_13' : mat.viscoelastic['G_13_v'][time_scale_ind],
+                                 'G_23' : mat.viscoelastic['G_23_v'][time_scale_ind],
+                                 'nu' : mat.nu.tolist(),
+                                 'name' : mat.name + ' time scale : {}'.format(tau)}
+
+                    curr_materials[MatID] = OrthotropicMaterial(ID=MatID,
+                                                                flag_mat=False,
+                                                                **curr_dict)
+            time_scale_mat_dicts[i] = curr_materials
+
+        # 5. calculate integrated element contributions
+        # This mapping is just the partial product that maps force/moments
+        # back to forces/moments (or time derivatives to be integrated)
+        
+        viscoelastic_6x6 = len(time_scale_list) * [None]
+        
+        for tau_ind, tau in enumerate(time_scale_list):
+            
+            material_dict = time_scale_mat_dicts[tau_ind]
+            
+            force_to_forcedot = np.zeros((6,6))
+    
+            ze = np.zeros((6,6))
+            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+            ze[2, 0] = 1.0 # axial stress -> axial force
+    
+            for i,c in enumerate(self.mesh):
+    
+                cxy = c.center
+    
+                ze[3, 0] = cxy[1] # axial stress -> moment around x
+                ze[4, 0] = -cxy[0] # axial stress -> moment around y
+    
+                ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+                ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+    
+                De = material_dict[c.MatID].rotated_constitutive_tensor(
+                                                    c.theta_1[0], c.theta_3)
+    
+                force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+                
+                
+            viscoelastic_6x6[tau_ind] = trsf_sixbysix(force_to_forcedot @ tmp_TS, T)
+
+        if test_elastic:
+            
+            force_to_forcedot = np.zeros((6,6))
+    
+            ze = np.zeros((6,6))
+            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+            ze[2, 0] = 1.0 # axial stress -> axial force
+    
+            for i,c in enumerate(self.mesh):
+    
+                cxy = c.center
+    
+                ze[3, 0] = cxy[1] # axial stress -> moment around x
+                ze[4, 0] = -cxy[0] # axial stress -> moment around y
+    
+                ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
+                ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
+    
+                De = self.materials[c.MatID].rotated_constitutive_tensor(
+                                                         c.theta_1[0], c.theta_3)
+    
+                force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
+            
+            error = np.linalg.norm(force_to_forcedot - np.eye(6))
+            
+            print('Error in recovering elastic 6x6 with mappings is: {:.3e}'
+                  .format(error))
+
+        if test_tau0:
+            # Test that all of the viscoelastic matrices add up to the 
+            # default calculated matrix
+            
+            sum_6x6 = np.zeros((6,6))
+            
+            for mat6x6 in viscoelastic_6x6:
+                sum_6x6 += mat6x6
+            
+            error = np.linalg.norm(self.BeamProperties.TS - sum_6x6)
+            
+            mag = np.linalg.norm(self.BeamProperties.TS)
+            
+            print('Adding all time scale 6x6 v. baseline error: '
+                  + 'absolute: {:.3e}, relative: {:.3e}'
+                  .format(error, error/mag))
+            
+            print('This error should be small if the (sum of the elastic'
+                  + ' modulus and shear modulus at all time scales) equals'
+                  + ' the reference elastic and shear moduli.')
+
+        self.BeamProperties.TSv = viscoelastic_6x6
+        self.BeamProperties.tau = time_scale_list
+        
+        return viscoelastic_6x6
 
     def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):
         """ 
@@ -1091,6 +920,85 @@ class CBM(object):
         tmp_MM = trsf_sixbysix(tmp_bp.MM, T)
         return (tmp_TS, tmp_MM)
 
+
+
+    def cbm_exp_dymore_beamprops(self, eta, Theta=0, solver="vabs", units={"mass": "kg", "length": "m", "force": "N"}):
+        """
+        Converts the Units of CBM to DYMORE/PYMORE/MARC units and returns the 
+        array of the beamproperties with Massterms(6), Stiffness(21), 
+        damping(1) and curvilinear coordinate(1)
+
+        Parameters
+        ----------
+        
+        eta : float, 
+            is the beam curvilinear coordinate of the beam from 0 to 1. 
+        
+        Theta: float
+            is the angle of rotation of the coordinate system in "radians"
+
+        Returns
+        ----------
+        arr : ndarray
+            [Massterms(6) (m00, mEta2, mEta3, m33, m23, m22) 
+            Stiffness(21) (k11, k12, k22, k13, k23, k33,... k16, k26, ...k66)
+            Viscous Damping(1) mu, Curvilinear coordinate(1) eta]
+            
+            
+        Notes
+        ----------
+        - Unit Convertion takes sooo much time. Commented out for now!
+        
+        """
+        if solver == "vabs" or solver == "anbax":
+            if Theta != 0:
+                tmp_bp = self.BeamProperties.rotate(Theta)
+            else:
+                tmp_bp = self.BeamProperties
+
+        else:
+            print("Check solver for Dymore Beam Property input.")
+
+
+        MM = tmp_bp.MM
+        MASS = np.array([MM[0, 0], MM[2, 3], MM[0, 4], MM[5, 5], MM[4, 5], MM[4, 4]])
+        STIFF = tmp_bp.TS[np.tril_indices(6)[1], np.tril_indices(6)[0]]
+        mu = 0.0
+        return np.hstack((MASS, STIFF, mu, eta))
+
+
+    def cbm_post_2dmesh(self, attribute="MatID", title="NOTITLE", **kw):
+        """
+        CBM Postprocessing method that displays the mesh with matplotlib.
+        
+        Parameters
+        ----------
+        attribute : string, optional
+            Uses the string to look for the cell attributes. 
+            The default attribute is MatID. Possible other attributes can be 
+            fiber orientation (theta_3) or strains and stresses. 
+            If BeamProperties are already calculated by VABS or something
+            similar, elastic-axis, center-of-gravity... are displayed.
+        title : string, optional
+            Title to be placed over the plot.
+        **kw : keyword arguments, optional
+            are passed to the lower "plot_cells" function. Such options are: 
+            VABSProperties=None, title='None', plotTheta11=False, 
+            plotDisplacement=False, savepath
+            
+        Returns
+        ----------
+        (fig, ax) : tuple
+            figure and axis handler are returned by the method
+        
+        Examples
+        ----------
+        >>> job.cbm_post_2dmesh(title='Hello World!', attribute='theta_3', plotTheta11=True)
+
+        """
+        mesh, nodes = sort_and_reassignID(self.mesh)
+        fig, ax = plot_cells(self.mesh, nodes, attribute, self.materials, self.BeamProperties, title, **kw)
+        return fig, ax
 
 #%%############################################################################
 #                           M    A    I    N                                  #

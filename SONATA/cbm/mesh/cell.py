@@ -16,13 +16,17 @@ from OCC.Core.Geom2dAPI import (Geom2dAPI_PointsToBSpline,
 from OCC.Core.gp import gp_Pnt2d, gp_Vec2d
 
 # First party modules
-from SONATA.cbm.mesh.cell_utils import calc_cell_angles
 from SONATA.cbm.topo.utils import (PolygonArea, calc_angle_between,
                                    point2d_list_to_TColgp_Array1OfPnt2d,)
 
 
 class Cell(object):
-    __slots__ = ("id", "nodes", "theta_1", "theta_3", "MatID", "structured", "interior_nodes", "strain", "strainM", "stress", "stressM", "sf", "failure_mode")
+    __slots__ = ("id", "nodes", "theta_1", "theta_3", "MatID", "structured",
+                 "interior_nodes", "strain", "strainM", "stress", "stressM",
+                 "sf", "failure_mode","fm_to_strain")
+    # fm_to_strain is the the mapping calculated with ANBA from the 
+    # Force/Moment at section to the strain (using engineering shear strain)
+    # within the element.
     class_counter = 1
 
     def __init__(self, nodeLst):  # int
@@ -57,28 +61,20 @@ class Cell(object):
     #        self.stressM = Stress()   #[sigma11,sigma12,sigma13,sigma22,sigma23,sigma33]M
 
     @property
-    def wire(self):
-        return self.build_wire()
-
-    @property
     def theta_11(self):
         return self.theta_1[0]
 
     @property
     def area(self):
         return self.calc_area()
+    
+    @property
+    def center(self):
+        return self.calc_center()
 
     @property
     def orientation(self):
         return self.calc_orientation()
-
-    @property
-    def minimum_angle(self):
-        return np.amin(calc_cell_angles(self))
-
-    @property
-    def maximum_angle(self):
-        return np.amax(calc_cell_angles(self))
 
     def __repr__(self):
         """
@@ -102,22 +98,6 @@ class Cell(object):
         """Restore state from the unpickled state values."""
         self.id, self.nodes, self.theta_3, self.MatID, self.theta_1, self.structured, self.interior_nodes = state
         # self.wire = self.build_wire()
-
-    def split_quads(self):
-        """method that splits quad cells into triangles and returns the list of
-        cells [originalcell, newcell]"""
-
-        if len(self.nodes) == 3:
-            return [self]
-        elif len(self.nodes) == 4:
-            newcell = Cell([self.nodes[0], self.nodes[2], self.nodes[3]])
-            newcell.theta_1 = self.theta_1
-            newcell.theta_3 = self.theta_3
-            newcell.MatID = self.MatID
-            self.nodes = [self.nodes[0], self.nodes[1], self.nodes[2]]
-            return [self, newcell]
-        else:
-            return []
 
     def calc_theta_1(self):
         """This method calculates the theta_1 vector. theta_1[0] represents the 
@@ -160,6 +140,25 @@ class Cell(object):
         for node in self.nodes:
             corners.append(node.coordinates)
         return PolygonArea(corners)
+    
+    def calc_center(self):
+        """Calculates the coordinates of the center of mass of the element"""
+        corners = []
+        for node in self.nodes:
+            corners.append(node.coordinates)
+        
+        if len(corners) == 3:
+            # See https://en.wikipedia.org/wiki/Centroid#Of_a_triangle
+            center = np.array(corners).mean(axis=0)
+        else:
+            # could implement:
+            # https://en.wikipedia.org/wiki/Centroid#Of_a_polygon
+            print('Center not calculated for non-triangular cells,'
+                  + ' returning nan.')
+            center = np.array([np.nan, np.nan])
+        
+        return center
+        
 
     def calc_orientation(self):
         """Calculates the orientation of the cell.
@@ -179,26 +178,6 @@ class Cell(object):
     def invert_nodes(self):
         self.nodes.reverse()
 
-    def min_facelenght(self):
-        fl = []
-        for i, n in enumerate(self.nodes[:-1]):
-            fl.append(n.Distance(self.nodes[i + 1]))
-        fl.append(self.nodes[-1].Distance(self.nodes[0]))
-        return min(fl)
-
-    def build_wire(self):
-        WireBuilder = BRepBuilderAPI_MakeWire()
-        for i in range(0, len(self.nodes) - 1):
-            me = BRepBuilderAPI_MakeEdge(self.nodes[i].Pnt, self.nodes[i + 1].Pnt)
-            if me.IsDone():
-                WireBuilder.Add(me.Edge())
-
-        me = BRepBuilderAPI_MakeEdge(self.nodes[-1].Pnt, self.nodes[0].Pnt)
-        if me.IsDone():
-            WireBuilder.Add(me.Edge())
-
-        return WireBuilder.Wire()
-
     def cell_node_distance(self, node):
         P_distances = []
 
@@ -210,6 +189,22 @@ class Cell(object):
                 P_distances.append(projection.Distance(j))
 
         return min(P_distances or [10e6])
+    
+    def split_quads(self):
+        """method that splits quad cells into triangles and returns the list of
+        cells [originalcell, newcell]"""
+
+        if len(self.nodes) == 3:
+            return [self]
+        elif len(self.nodes) == 4:
+            newcell = Cell([self.nodes[0], self.nodes[2], self.nodes[3]])
+            newcell.theta_1 = self.theta_1
+            newcell.theta_3 = self.theta_3
+            newcell.MatID = self.MatID
+            self.nodes = [self.nodes[0], self.nodes[1], self.nodes[2]]
+            return [self, newcell]
+        else:
+            return []
 
     def closest_cell_edge(self, node):
         P_distances = []

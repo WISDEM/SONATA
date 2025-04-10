@@ -72,22 +72,6 @@ class Weight(object):
         return wire.Wire()
 
 
-#        elif style == 1:
-#        W = 0.4
-#        P1 = Center.Translated(gp_Vec2d(-R,0))
-#        ANG = float(120)/180*np.pi
-#        P2 = P1.Rotated(Center,ANG)
-#        P3 = P2.Rotated(Center,ANG)
-#
-#        P12 = WeightStyle1_BezierPoint(P1,P2,W)
-#        P23 = WeightStyle1_BezierPoint(P2,P3,W)
-#        P31 = WeightStyle1_BezierPoint(P3,P1,W)
-#
-#        Bezier1 = Geom2d_BezierCurve(point2d_list_to_TColgp_Array1OfPnt2d([P1,P12,P2]))
-#        Bezier2 = Geom2d_BezierCurve(point2d_list_to_TColgp_Array1OfPnt2d([P2,P23,P3]))
-#        Bezier3 = Geom2d_BezierCurve(point2d_list_to_TColgp_Array1OfPnt2d([P3,P31,P1]))
-
-
 # ======================================================
 #       MAIN
 # ======================================================

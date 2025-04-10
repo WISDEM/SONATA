@@ -121,7 +121,7 @@ def interp_airfoil_position(airfoil_position, airfoils, grid_loc):
         return af1
 
     # return transformed airfoil
-    return af1.transformed(af2, k, 200)
+    return af1.transformed(af2, k)
 
 
 def make_loft(elements, solid=False, ruled=False, tolerance=1e-6, 

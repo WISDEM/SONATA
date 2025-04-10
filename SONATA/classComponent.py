@@ -37,9 +37,5 @@ class Component(object):
         string reputation of an object, """
         return "Component: " + self.name
 
-    def display_Ax2(self):
-        pass
-
-
 if __name__ == "__main__":
     C = Component(gp_Pnt(0, 10, 0), gp_Dir(1, 0, 0), name="TestComponent")

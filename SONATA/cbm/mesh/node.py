@@ -10,10 +10,6 @@ from functools import total_ordering
 # Third party modules
 from OCC.Core.gp import gp_Pnt, gp_Pnt2d
 
-# First party modules
-from SONATA.cbm.topo.BSplineLst_utils import (find_BSplineLst_pos,
-                                              findPnt_on_BSplineLst,)
-
 
 @total_ordering
 class Node(object):
@@ -40,17 +36,7 @@ class Node(object):
     @property
     def coordinates(self):
         return [self.Pnt2d.X(), self.Pnt2d.Y()]  # [x,y]
-
-    def b_BSplineLst_pos(self, b_BSplineLst):
-        para = findPnt_on_BSplineLst(self.Pnt2d, b_BSplineLst)  # slow but robust
-        # para = [self.parameters[1],self.parameters[2]]          #fast but not so sure if it's robust
-        try:
-            return find_BSplineLst_pos(b_BSplineLst, para)
-
-        except:
-            print("Node", self.id, "not on b_BSplineLst")
-            return None
-
+    
     def __repr__(self):
         return str("Node: %s @ [%.3f,%.3f]" % (self.id, self.coordinates[0], self.coordinates[1]))
 
@@ -89,13 +75,3 @@ class Node(object):
         """Restore state from the unpickled state values."""
         self.id, self.parameters, self.corner, self.cornerstyle, self.regular_corner, self.displacement, tmp_coords = state
         self.Pnt2d = gp_Pnt2d(tmp_coords[0], tmp_coords[1])
-
-    def Distance(self, other):
-        return self.Pnt2d.Distance(other.Pnt2d)
-
-
-def Pnt2dLst_to_NodeLst(Pnt2dLst):
-    NodeLst = []
-    for Pnt2d in Pnt2dLst:
-        NodeLst.append(Node(Pnt2d))
-    return NodeLst

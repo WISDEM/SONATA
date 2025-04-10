@@ -1,4 +1,4 @@
-[![Build Status](https://github.com/ptrbortolotti/SONATA/workflows/CI_SONATA/badge.svg?branch=master)](https://github.com/ptrbortolotti/SONATA/actions)
+[![Build Status](https://github.com/WISDEM/SONATA/workflows/CI_SONATA/badge.svg?branch=master)](https://github.com/WISDEM/SONATA/actions)
 
 # SONATA
 
@@ -13,13 +13,27 @@ SONATA can be run on mac and linux machines. No Windows installation is supporte
 
 At NREL (and possibly at other institutes), first disconnect from vpn client during installation in order to avoid remote server error when trying to retrieve URLs for installation.
 
-First setup an anaconda environment, here named sonata-env, activate it, and add the pythonocc library (v7.4.1)
+First setup an anaconda environment, here named sonata-env, activate it, and add the pythonocc library (v7.4.1).
+You should do this in the folder that you want to clone SONATA to.
 
 ```
 conda config --add channels conda-forge
 conda config --add channels tpaviot
-conda env create --name sonata-env -f https://raw.githubusercontent.com/ptrbortolotti/SONATA/master/environment.yaml python=3.9
+git clone git@github.com:WISDEM/SONATA.git
+cd SONATA
+```
+If you have a mac with a newer chip, run the following:
+```
+CONDA_SUBDIR=osx-64 conda env create --name sonata-env -f environment.yaml
 conda activate sonata-env
+conda config --env --set subdir osx-64 # run with sonata-env active.
+cd ..
+```
+Otherwise, you should be able to run:
+```
+conda env create --name sonata-env -f environment.yaml
+conda activate sonata-env
+cd ..
 ```
 
 Next, download the solvers VABS (commercial, use wine to run it on mac/linux systems) or in the same conda environment compile ANBA4 (open-source)
@@ -31,10 +45,9 @@ pip install -e .
 cd ..
 ```
 
-Finally, go to the folder where you want to clone SONATA and type:
+Go back to where you cloned SONATA and type:
 
 ```
-git clone git@github.com:ptrbortolotti/SONATA.git
 cd SONATA
 pip install -e .
 ```

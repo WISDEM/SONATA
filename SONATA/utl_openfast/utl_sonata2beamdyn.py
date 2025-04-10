@@ -25,7 +25,6 @@ Outputs:
 """
 # ============================================= #
 
-
 import os
 import numpy as np
 from scipy.interpolate import interp1d
@@ -34,7 +33,6 @@ from SONATA.cbm.cbm_utl import trsf_sixbysix
 
 if __name__ == '__main__':
     os.chdir('../..')
-
 
 # --- Convert from SONATA/VABS coordinates to BeamDyn coordinates ---#
 def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
@@ -56,7 +54,6 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
     beam_neutral_axes_init = np.zeros([len(cs_pos), 2])
     beam_geometric_center_init = np.zeros([len(cs_pos), 2])
     beam_shear_center_init = np.zeros([len(cs_pos), 2])
-
 
     BeamDyn_beam_prop = {}
     BeamDyn_beam_prop['beam_section_mass'] = np.zeros([len(cs_pos), 1])
@@ -86,7 +83,6 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
             print('Radial station ' + str(cs_pos[i]) + ' did not run successfully in VABS. Check yaml input or change location!')
             # ToDo: instead of break -> skip or interpolate in between working radial stations
 
-
     # --------------------------------------- #
     #  rotate VABS results from SONATA/VABS def to BeamDyn def coordinate system
     
@@ -105,7 +101,6 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
     print('STATUS:\t Structural characteristics of VABS converted from SONATA/VABS to BeamDyn coordinate system definition!')
 
     return BeamDyn_beam_prop
-
 
 
 
@@ -194,11 +189,19 @@ def write_beamdyn_axis(folder, flags_dict, wt_name, ra, twist):
     return None
 
 # --- Write BeamDyn_Blade file with blade properties ---#
-def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations, beam_stiff, beam_inertia, mu):
+def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations,
+                       beam_stiff, beam_inertia, mu, format_name='BeamDyn'):
     n_pts = len(radial_stations)
 
     # file = open(folder + '00_analysis/analysis/' + wt_name + '_BeamDyn_Blade.dat', 'w')
-    file = open(os.path.join(folder , wt_name + '_BeamDyn_Blade.dat'), 'w')
+    file = open(os.path.join(folder , wt_name + '_' + format_name 
+                             + '_Blade.dat'), 'w')
+    
+    if not (format_name == 'BeamDyn'):
+        file.write(' ------- NOT A BeamDyn Input File. Format is: {:}'
+                   .format(format_name) + ' --------------------------\n')
+        
+    
     file.write(' ------- BEAMDYN V1.00.* INDIVIDUAL BLADE INPUT FILE --------------------------\n')
     file.write(' Test Format 1\n')
     file.write(' ---------------------- BLADE PARAMETERS --------------------------------------\n')
@@ -210,12 +213,10 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations, beam_stiff,
     file.write('\t %.5e \t %.5e \t %.5e \t %.5e \t %.5e \t %.5e\n' % (mu[0], mu[1], mu[2], mu[3], mu[4], mu[5])) 
     file.write(' ---------------------- DISTRIBUTED PROPERTIES---------------------------------\n')
 
-
     if flags_dict['flag_write_BeamDyn_unit_convert'] == 'mm_to_m':  # convert units from mm (yaml input) to m
         beam_stiff = convert_stiff_matrix(beam_stiff, flags_dict)
         beam_inertia = convert_inertia_matrix(beam_inertia, flags_dict)
         print('STATUS: converted from mm to m for export to BeamDyn_Blade.dat file')
-
 
     for i in range(n_pts):
         file.write('\t %.6f \n' % (radial_stations[i]))
@@ -237,6 +238,57 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations, beam_stiff,
 
     print('Finished writing BeamDyn_Blade File')
 
+    return None
+
+# --- Write BeamDyn_Blade file with blade properties ---#
+def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
+                               time_scales, beam_viscoelastic,
+                               format_name='BeamDyn'):
+    n_pts = len(radial_stations)
+
+    output_name = os.path.join(folder , wt_name + '_' + format_name
+                               + '_Blade_Viscoelastic.dat')
+    
+    # file = open(folder + '00_analysis/analysis/' + wt_name + '_BeamDyn_Blade.dat', 'w')
+    file = open(output_name, 'w')
+    
+    if not (format_name == 'BeamDyn'):
+        file.write(' ------- NOT A BeamDyn Input File. Format is: {:}'
+                   .format(format_name) + ' --------------------------\n')
+        
+    file.write(' ------- BEAMDYN V1.00.* INDIVIDUAL BLADE INPUT FILE --------------------------\n')
+    file.write(' Test Format 1\n')
+    file.write(' ---------------------- BLADE PARAMETERS --------------------------------------\n')
+    file.write('{:d}   station_total        - Number of blade input stations (-)\n'
+               .format(n_pts))
+    file.write('{:d}   time_scales_total    - Number of blade input stations (-)\n'
+               .format(len(time_scales)))
+    file.write('  ---------------------- Time Scales (s) ------------------------------------\n')
+    file.write(''.join(str(t)+'   ' for t in time_scales)[:-3] + '\n')
+    file.write(' ---------------------- DISTRIBUTED PROPERTIES---------------------------------\n')
+
+    assert not (flags_dict['flag_write_BeamDyn_unit_convert'] == 'mm_to_m'), \
+        'Viscoelastic beam property output does not support unit conversion.'
+
+    for i in range(n_pts):
+        file.write('\t %.6f \n' % (radial_stations[i]))
+        # loop over time scales
+        for k in range(len(time_scales)):
+            
+            curr_stiff = beam_viscoelastic[i, k, :, :]
+        
+            # write stiffness matrices
+            for j in range(6):
+                file.write('\t %.16e \t %.16e \t %.16e \t %.16e \t %.16e \t %.16e\n' % (
+                curr_stiff[j, 0], curr_stiff[j, 1], curr_stiff[j, 2],
+                curr_stiff[j, 3], curr_stiff[j, 4], curr_stiff[j, 5]))
+            file.write('\n')
+
+        # ToDO: check correct translation of stiffness and mass matrices from VABS and anbax !!!
+    file.close()
+
+    print('STATUS:\t Finished writing BeamDyn_Blade_Viscoelastic file.')
+    
     return None
 
 
@@ -267,7 +319,6 @@ def convert_inertia_matrix(beam_inertia, flags_dict):
                     beam_inertia[:, j, k] = beam_inertia[:, j, k] * 1e-6  # kg mm2 -> kg m2
 
     return beam_inertia
-
 
 # ==============
 # Main
@@ -301,4 +352,5 @@ if __name__ == '__main__':
 
     write_beamdyn_axis(folder, wt_name, yml.get('components').get('blade'))
     write_beamdyn_prop(folder, wt_name, radial_stations, beam_stiff, beam_inertia)
+
 
