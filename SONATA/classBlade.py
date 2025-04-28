@@ -626,6 +626,17 @@ class Blade(Component):
         
         Saves out npz files for each station to map from sectional internal
         forces and moments to stress and strain in each element.
+        
+        The maps have keys in the file of `fc_to_strain_m` and
+        `fc_to_stress_m`.
+        These maps are (6,6,Nelem). For each element index in the third
+        position, the 6x6 matrix can multiply the local internal stresses.
+        These maps are to the strain and stress respectively in the material
+        coordinates.
+        
+        Stresses and strains are in order [11, 22, 33, 23, 13, 12]
+        
+        Additional documentation available on `cbm_exp_stress_strain_map`
 
         """
         
