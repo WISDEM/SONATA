@@ -796,6 +796,146 @@ def test_moment_dir3():
         assert np.abs(sigma23).max() < 50.0, \
             "Should have 0 sigma23 for moment 3."
 
+def test_output_maps():
+    
+    job_str = '6_box_beam.yaml'
+    
+    loads_dict = {"Forces": [1.0e3, 0.5e3, 0.67e3],
+                  "Moments": [0.2e2, 0.7e2, 0.9e2]
+                  }
+    
+    # Path to yaml file
+    run_dir = os.path.dirname( os.path.realpath(__file__) ) + os.sep
+    job_name = 'Box_Beam'
+    filename_str = run_dir + job_str
+    
+    # ===== Define flags ===== #
+    flag_wt_ontology        = True # if true, use ontology definition of wind turbines for yaml files
+    flag_ref_axes_wt        = True # if true, rotate reference axes from wind definition to comply with SONATA (rotorcraft # definition)
+    
+    # --- plotting flags ---
+    # Define mesh resolution, i.e. the number of points along the profile that is used for out-to-inboard meshing of a 2D blade cross section
+    mesh_resolution = 400
+    # For plots within blade_plot_sections
+    
+    # 2D cross sectional plots (blade_plot_sections)
+    flag_plotTheta11        = False      # plane orientation angle
+    flag_recovery           = True     # Set to True to Plot stresses/strains
+    flag_plotDisplacement   = True     # Needs recovery flag to be activated - shows displacements from loadings in cross sectional plots
+    
+    # 3D plots (blade_post_3dtopo)
+    flag_wf                 = True      # plot wire-frame
+    flag_lft                = True      # plot lofted shape of blade surface (flag_wf=True obligatory); Note: create loft with grid refinement without too many radial_stations; can also export step file of lofted shape
+    flag_topo               = True      # plot mesh topology
+    c2_axis                 = False
+    flag_DeamDyn_def_transform = True               # transform from SONATA to BeamDyn coordinate system
+    flag_write_BeamDyn = True                       # write BeamDyn input files for follow-up OpenFAST analysis (requires flag_DeamDyn_def_transform = True)
+    flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exported to BeamDyn files
+    
+    # Flag applies twist rotations in SONATA before output and then sets the output
+    # twist to all be zero degrees.
+    flag_output_zero_twist = False
+    
+    
+    # create flag dictionary
+    flags_dict = {"flag_wt_ontology": flag_wt_ontology,
+                  "flag_ref_axes_wt": flag_ref_axes_wt,
+                  "attribute_str": 'MatID',
+                  "flag_plotDisplacement": flag_plotDisplacement,
+                  "flag_plotTheta11": flag_plotTheta11,
+                  "flag_wf": flag_wf,
+                  "flag_lft": flag_lft,
+                  "flag_topo": flag_topo,
+                  "mesh_resolution": mesh_resolution,
+                  "flag_recovery": flag_recovery,
+                  "c2_axis": c2_axis}
+    
+    
+    # ===== User defined radial stations ===== #
+    radial_stations = [0.7]
+    
+    # initialize job with respective yaml input file
+    job = Blade(name=job_name, filename=filename_str, flags=flags_dict,
+                stations=radial_stations)
+    
+    # ===== Build & mesh segments ===== #
+    job.blade_gen_section(topo_flag=True, mesh_flag=True)
+    
+    # ===== Recovery Analysis + BeamDyn Outputs ===== #
+    
+    flags_dict['flag_csv_export'] = False
+    flags_dict['flag_DeamDyn_def_transform'] = flag_DeamDyn_def_transform
+    flags_dict['flag_write_BeamDyn'] = flag_write_BeamDyn
+    flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert
+    flags_dict['flag_output_zero_twist'] = flag_output_zero_twist
+    
+    # Flag for different load input formats.
+    # Just used for example script, not passed to SONATA
+    
+    mu = np.zeros(6)
+    beam_struct_eval(flags_dict, loads_dict, radial_stations, job, run_dir, job_str, mu)
+
+    # Create stress and strain maps
+    
+    output_folder = os.path.join(os.path.dirname( os.path.realpath(__file__) ),
+                                 'stress-map')
+    
+    job.blade_exp_stress_strain_map(output_folder=output_folder)
+    
+    map_fname = os.path.join(output_folder, 
+                         'blade_station{:04d}_stress_strain_map.npz'.format(0))
+    
+    map_data = np.load(map_fname)
+    
+    fc = np.hstack((loads_dict['Forces'], loads_dict['Moments']))
+    
+    strain = np.einsum('ijk,j->ik', map_data['fc_to_strain_m'], fc)
+    stress = np.einsum('ijk,j->ik', map_data['fc_to_stress_m'], fc)
+    area = map_data['elem_areas']
+    cxy = map_data['elem_cxy']
+    
+    mesh = job.sections[0][1].mesh
+    
+    # Assume that the mesh was consistently sorted for internal stress/strain
+    # calculations and the outputs
+    elem_stress = np.zeros_like(stress)
+    elem_strain = np.zeros_like(strain)
+    elem_area = np.zeros_like(area)
+    elem_cxy = np.zeros_like(cxy)
+    
+    for ind,cell in enumerate(mesh):
+        elem_stress[:, ind] = np.array([cell.stressM.sigma11,
+                                        cell.stressM.sigma22,
+                                        cell.stressM.sigma33,
+                                        cell.stressM.sigma23,
+                                        cell.stressM.sigma13,
+                                        cell.stressM.sigma12])
+        
+        elem_strain[:, ind] = np.array([cell.strainM.epsilon11,
+                                        cell.strainM.epsilon22,
+                                        cell.strainM.epsilon33,
+                                        cell.strainM.gamma23,
+                                        cell.strainM.gamma13,
+                                        cell.strainM.gamma12])
+        
+        elem_area[ind] = cell.area
+
+        elem_cxy[ind, :] = cell.center
+
+    # This failing likely means that the elements are not consistently sorted.
+    assert np.allclose(area, elem_area), \
+        'Areas are different on loaded recovery.'
+        
+    # This failing likely means that the elements are not consistently sorted.
+    assert np.allclose(cxy, elem_cxy), \
+        'Element centers are different on loaded recovery.'
+        
+    assert np.allclose(stress, elem_stress, atol=1e-18), \
+        'Stresses are different on loaded recovery.'
+    
+    assert np.allclose(strain, elem_strain, atol=1e-7), \
+        'Strains are different on loaded recovery.'
+    
 
 if __name__ == "__main__":
     pytest.main(["-s", "test_stress_recov.py"])

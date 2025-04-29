@@ -1,4 +1,4 @@
-[![Build Status](https://github.com/WISDEM/SONATA/workflows/CI_SONATA/badge.svg?branch=master)](https://github.com/WISDEM/SONATA/actions)
+[![Build Status](https://github.com/WISDEM/SONATA/actions/workflows/python-package-conda.yml/badge.svg)](https://github.com/WISDEM/SONATA/actions/workflows/python-package-conda.yml)
 
 # SONATA
 
