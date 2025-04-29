@@ -901,6 +901,11 @@ class CBM(object):
         'blade_station{station_ind}_stress_strain_map.npz'
         
         Outputs are engineering shear strain (not elasticity tensor components)
+        
+        The mesh outputs are described by `node_coords` (row `i` has
+        coorindates for node `i`), `cells` (each row has node numbers for the
+        cell), `theta_11` (first cell rotation parameter), `theta_3` (second
+        cell rotation parameter).
 
         """
 
@@ -922,23 +927,14 @@ class CBM(object):
         anba = anbax(mesh, 1, matLibrary, materials, plane_orientations,
                      fiber_orientations, maxE)
         
+        # These lines are necessary for what happens in the objects
+        # not for this outputs here.
         tmp_TS = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
         tmp_MM = anba.inertia().getValues(range(6),range(6))    # get mass matrix
 
         # Define transformation T (from ANBA to SONATA/VABS coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
-
-        self.BeamProperties = BeamSectionalProps()
-        self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
-        self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
-
-        # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
-        self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
-        self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
-
-        # Recover the mapping from sectional Forces and Moments to Strain
-        # in a non-invasive way from ANBA
         
             
         fc_to_strain_m = np.zeros((6,6,len(self.mesh)))
@@ -1020,6 +1016,27 @@ class CBM(object):
         for mat in self.materials:
             material_names[mat] = self.materials[mat].name
             
+        ##################
+        # format mesh information
+
+        n_nodes = len(nodes)
+        
+        node_coords = np.full((n_nodes, 2), np.nan)
+        cells = np.zeros((len(self.mesh), 3), np.int64)
+        theta_11 = np.zeros(len(self.mesh))
+        theta_3 = np.zeros(len(self.mesh))
+        
+        for ind,cell_i in enumerate(self.mesh):
+            cells[ind] = [n.id-1 for n in cell_i.nodes]
+            
+            theta_11[ind] = cell_i.theta_11
+            theta_3[ind] = cell_i.theta_3
+            
+            for n in cell_i.nodes:
+                node_coords[n.id-1] = [n.Pnt2d.X(), n.Pnt2d.Y()]
+                
+        ##################
+        # output information
         
         if 'output_folder' in kwargs.keys():
             folder = kwargs['output_folder']
@@ -1041,6 +1058,10 @@ class CBM(object):
                  elem_materials=elem_materials,
                  material_names=np.asarray(material_names),
                  elem_cxy=elem_cxy,
+                 node_coords=node_coords,
+                 cells=cells,
+                 theta_11=theta_11,
+                 theta_3=theta_3,
                  allow_pickle=False)
 
         return

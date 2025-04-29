@@ -615,7 +615,8 @@ class Blade(Component):
         output_folder : str, optional
             Folder to output mapping files to.
         **kwargs : TYPE
-            Ignored.
+            Passed to section. Options/defaults include
+            `output_folder='stress-map'`
 
         Returns
         -------

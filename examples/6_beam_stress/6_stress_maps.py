@@ -168,3 +168,21 @@ plt.ylabel('y [m]')
 plt.gca().set_aspect('equal')
 
 plt.show()
+
+# ===== Plot the mesh for reference ===== #
+
+cells = map_data['cells']
+node_coords = map_data['node_coords']
+
+
+for ind in range(cells.shape[0]):
+
+    node_list = np.hstack((cells[ind], cells[ind, 0]))
+
+    plt.plot(node_coords[node_list, 0], node_coords[node_list, 1],
+             'k', linewidth=0.1)
+
+plt.xlabel('x [m]')
+plt.ylabel('y [m]')
+plt.gca().set_aspect('equal')
+plt.show()
