@@ -8,6 +8,16 @@ SONATA is a toolbox for Multidiciplinary Rotor Blade Design Environment for Stru
 SONATA has been adapted to wind energy applications thanks to work performed at the National Renewable Energy Laboratory ([NREL](https://www.nrel.gov)) in Colorado, USA and funded by the US Department of Energy, Wind Energy Technology Office under the Big Adaptive Rotor program. This repository is managed by Pietro Bortolotti, researcher in the systems engineering group at NREL.
 
 
+
+## Part of the WETO Stack
+
+SONATA is primarily developed with the support of the U.S. Department of Energy and is part of the [WETO Software Stack](https://nrel.github.io/WETOStack). For more information and other integrated modeling software, see:
+- [Portfolio Overview](https://nrel.github.io/WETOStack/portfolio_analysis/overview.html)
+- [Entry Guide](https://nrel.github.io/WETOStack/_static/entry_guide/index.html)
+- [Systems Engineering Workshop](https://nrel.github.io/WETOStack/workshops/user_workshops_2024.html#systems-engineering)
+
+
+
 ## Installation
 SONATA can be run on mac and linux machines. No Windows installation is supported at the moment. We make use of Anaconda, which is a commonly used package manager for python. Download and install the latest anaconda version [here](https://docs.anaconda.com/anaconda/install/)
 
