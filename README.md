@@ -11,7 +11,7 @@ SONATA has been adapted to wind energy applications thanks to work performed at 
 
 ## Part of the WETO Stack
 
-RAFT is primarily developed with the support of the U.S. Department of Energy and is part of the [WETO Software Stack](https://nrel.github.io/WETOStack). For more information and other integrated modeling software, see:
+SONATA is primarily developed with the support of the U.S. Department of Energy and is part of the [WETO Software Stack](https://nrel.github.io/WETOStack). For more information and other integrated modeling software, see:
 - [Portfolio Overview](https://nrel.github.io/WETOStack/portfolio_analysis/overview.html)
 - [Entry Guide](https://nrel.github.io/WETOStack/_static/entry_guide/index.html)
 - [Systems Engineering Workshop](https://nrel.github.io/WETOStack/workshops/user_workshops_2024.html#systems-engineering)
