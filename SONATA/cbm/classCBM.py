@@ -671,6 +671,12 @@ class CBM(object):
         for i,c in enumerate(self.mesh):
             
             c.fm_to_strain = np.zeros((6,6))
+
+        # Reordering is necessary from the conventional stress/strain order
+        # to match the constitutive tensor built from ANBAX.
+        # Both the strains and stresses need reordering so setting it here.
+        # All other orders here were tested and verified to give wrong results.
+        reorder_stress_strain = np.array([1, 2, 0, 4, 5, 3])
         
         # 2. Call ANBA looping over unit forces/moments
         for i in range(6):
@@ -706,19 +712,23 @@ class CBM(object):
                                       tmp_StrainF_tran[j,1,2],
                                       tmp_StrainF_tran[j,2,2]])
 
-                c.fm_to_strain[:, i] = np.array([curr_strain.epsilon11,
-                                                 curr_strain.epsilon22,
-                                                 curr_strain.epsilon33,
-                                                 curr_strain.gamma23,
-                                                 curr_strain.gamma13,
-                                                 curr_strain.gamma12])
+                strain_vec = np.array([curr_strain.epsilon11,
+                                             curr_strain.epsilon22,
+                                             curr_strain.epsilon33,
+                                             curr_strain.gamma23,
+                                             curr_strain.gamma13,
+                                             curr_strain.gamma12])
+                
+                c.fm_to_strain[:, i] = strain_vec[reorder_stress_strain]
 
         # 4. Create a material dictionary for each time scale.
         #    The will loop over those time scales
         time_scale_list = []
         
         for MatID in self.materials:
-            time_scale_list += self.materials[MatID]\
+            
+            if not (self.materials[MatID].viscoelastic == {}):
+                time_scale_list += self.materials[MatID]\
                                     .viscoelastic['time_scales_v'].tolist()
         
         time_scale_list = np.sort(np.unique(time_scale_list)).tolist()
@@ -733,7 +743,7 @@ class CBM(object):
                 
                 mat = self.materials[MatID]
                 
-                if hasattr(mat, 'viscoelastic'):
+                if hasattr(mat, 'viscoelastic') and not (mat.viscoelastic=={}):
                     found_time_scale = tau in mat.viscoelastic['time_scales_v'].tolist()
                 else:
                     found_time_scale = False
@@ -778,7 +788,6 @@ class CBM(object):
         # 5. calculate integrated element contributions
         # This mapping is just the partial product that maps force/moments
         # back to forces/moments (or time derivatives to be integrated)
-        
         viscoelastic_6x6 = len(time_scale_list) * [None]
         
         for tau_ind, tau in enumerate(time_scale_list):
@@ -787,14 +796,15 @@ class CBM(object):
             
             force_to_forcedot = np.zeros((6,6))
     
-            ze = np.zeros((6,6))
-            ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
-            ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
-            ze[2, 0] = 1.0 # axial stress -> axial force
     
             for i,c in enumerate(self.mesh):
     
                 cxy = c.center
+                
+                ze = np.zeros((6,6))
+                ze[0, -1] = 1.0 # shear stress x=2 -> shear force x
+                ze[1, -2] = 1.0 # shear stress y=3 -> shear force y
+                ze[2, 0] = 1.0 # axial stress -> axial force
     
                 ze[3, 0] = cxy[1] # axial stress -> moment around x
                 ze[4, 0] = -cxy[0] # axial stress -> moment around y
@@ -802,12 +812,13 @@ class CBM(object):
                 ze[-1, -2] = cxy[0] # shear zy (13) stress -> moment around z/torsion
                 ze[-1, -1] = -cxy[1] # shear zx (12) stress -> moment around z/torsion
     
+                ze = ze[:, reorder_stress_strain]
+
                 De = material_dict[c.MatID].rotated_constitutive_tensor(
                                                     c.theta_1[0], c.theta_3)
-    
+
                 force_to_forcedot += c.area * (ze @ De @ c.fm_to_strain)
-                
-                
+
             viscoelastic_6x6[tau_ind] = trsf_sixbysix(force_to_forcedot @ tmp_TS, T)
 
         if test_elastic:
