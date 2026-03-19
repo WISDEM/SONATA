@@ -1,6 +1,9 @@
 import os
 import time
+import numpy as np
+
 from SONATA.classBlade import Blade
+from SONATA.utl.beam_struct_eval import beam_struct_eval
 
 
 #------------------------------------------------------------------------------------
@@ -74,6 +77,13 @@ flag_wf = True                  # plot wire-frame
 flag_lft = True                 # plot lofted shape of blade surface
 flag_topo = True                # plot mesh topology
 
+# BeamDyn Outputs
+flag_DeamDyn_def_transform = True    # transform from SONATA to BeamDyn coordinate system
+flag_write_BeamDyn = True            # write BeamDyn input files for follow-up OpenFAST analysis (requires flag_DeamDyn_def_transform = True)
+flag_csv_export = True               # export csv files with structural data
+flag_write_BeamDyn_unit_convert = ''  #'mm_to_m'     # applied only when exported to BeamDyn files
+
+
 # Shape configuration of corners
 choose_cutoff = 2               # 0: step, 2: round corners
 
@@ -90,24 +100,37 @@ flags_dict = {
     "flag_recovery": flag_recovery
 }
 
+
 #-----------------------------------------
 # Execute SONATA analysis
 #-----------------------------------------
 # Define analysis stations
-radial_stations = [0.25]
+radial_stations = [0.25, 0.4, 0.82, 0.93, 1.0]
 
 print(f"Initializing blade analysis: {job_name}")
 job = Blade(
     name=job_name,
     filename=filename_str,
     flags=flags_dict,
+    stations=radial_stations,
 )
 
 print("Generating sections and mesh...")
 job.blade_gen_section(topo_flag=True, mesh_flag=True)
 
 print("Running ANBAX analysis...")
-job.blade_run_anbax()
+# job.blade_run_anbax() # call through beam_struct_eval instead to save outputs
+
+flags_dict['flag_csv_export'] = flag_csv_export
+flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert
+flags_dict['flag_DeamDyn_def_transform'] = flag_DeamDyn_def_transform
+flags_dict['flag_write_BeamDyn'] = flag_write_BeamDyn
+
+
+mu = np.zeros(6)
+
+beam_struct_eval(job_name, flags_dict, {}, radial_stations, job, run_dir,
+                 job_str, mu)
 
 #-----------------------------------------
 # Generate plots and summary
