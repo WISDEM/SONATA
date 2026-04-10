@@ -1,5 +1,5 @@
 name: Box_Beam1
-windIO_version: '2.0.1'
+windIO_version: '2.1.1'
 assembly:
     number_of_blades: 1
 components:
