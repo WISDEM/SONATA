@@ -227,10 +227,18 @@ class Blade(Component):
                     'SONATA currently only supports windIO version 2.X. ' \
                     + ' A different version appears to be installed'
 
-
                 assert input_vers_tuple[0] == 2, \
                     'SONATA currently only supports windIO version 2.X.' \
                         + ' Input specifies a different version.'
+
+                assert windIO_tuple[1] >= 1, \
+                    'SONATA currently has tests that support windIO version '\
+                    + '2.1 and not 2.0. Installed version does not match.'
+
+                if input_vers_tuple[1] < 1:
+                    print('WARNING: Input indicates windIO less than 2.1.'
+                          + ' SONATA supports testing with 2.1,'
+                          ' but earlier versions may fail.')
 
             else:
                 yml = windIO.load_yaml(filename)
