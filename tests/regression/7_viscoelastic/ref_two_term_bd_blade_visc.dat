@@ -5,9 +5,6 @@
 3   time_scales_total    - Number of blade input stations (-)
   ---------------------- Time Scales (s) ------------------------------------
 0.02299974   0.14994091   inf
------- Modal Damping [used only if damp_type=2] --------------------------------
-6                      n_modes     - Number of modal damping coefficients (-)
-0.01 0.01 0.01 0.01 0.01 0.01 zeta         - Damping coefficients for mode 1 through n_modes
  ---------------------- DISTRIBUTED PROPERTIES---------------------------------
 	 0.000000
 	 1.9665378649788186e+07 	 6.3055916065999202e+02 	 -1.0596446510373938e-25 	 -5.3669926558797432e-17 	 -2.6736786846400837e-16 	 -3.4170045171919944e-01
