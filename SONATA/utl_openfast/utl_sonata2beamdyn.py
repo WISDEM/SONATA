@@ -102,7 +102,7 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
 # --- Write BeamDyn file with blade reference line locations ---#
 def write_beamdyn_axis(folder, flags_dict, wt_name, ra, twist):
 
-    n_pts = 50
+    n_pts = 30
     grid = np.linspace(0, 1, n_pts)
 
     f_interp = interp1d(ra[:,0], ra[:,3])
@@ -154,11 +154,6 @@ def write_beamdyn_axis(folder, flags_dict, wt_name, ra, twist):
     file.write('          10   order_elem     - Order of interpolation (basis) function (-)\n')
     file.write('---------------------- MATERIAL PARAMETER --------------------------------------\n')
     file.write('"%s"    BldFile - Name of file containing properties for blade (quoted string)\n' % (wt_name + '_BeamDyn_Blade.dat'))
-    file.write('---------------------- PITCH ACTUATOR PARAMETERS -------------------------------\n')
-    file.write('False         UsePitchAct - Whether a pitch actuator should be used (flag)\n')
-    file.write('        200   PitchJ      - Pitch actuator inertia (kg-m^2) [used only when UsePitchAct is true]\n')
-    file.write('      2E+07   PitchK      - Pitch actuator stiffness (kg-m^2/s^2) [used only when UsePitchAct is true]\n')
-    file.write('     500000   PitchC      - Pitch actuator damping (kg-m^2/s) [used only when UsePitchAct is true]\n')
     file.write('---------------------- OUTPUTS -------------------------------------------------\n')
     file.write('False          SumPrint       - Print summary data to "<RootName>.sum" (flag)\n')
     file.write('"ES10.3E2"    OutFmt         - Format used for text tabular output, excluding the time channel.\n')
@@ -198,11 +193,14 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations,
     file.write(' Test Format 1\n')
     file.write(' ---------------------- BLADE PARAMETERS --------------------------------------\n')
     file.write('%u   station_total    - Number of blade input stations (-)\n' % (n_pts))
-    file.write(' 1   damp_type        - Damping type: 0: no damping; 1: damped\n')
+    file.write(' 1   damp_type        - Damping type (switch) 0: none, 1: stiffness-proportional, 2: modal\n')
     file.write('  ---------------------- DAMPING COEFFICIENT------------------------------------\n')
     file.write('   mu1        mu2        mu3        mu4        mu5        mu6\n')
     file.write('   (-)        (-)        (-)        (-)        (-)        (-)\n')
     file.write('\t %.5e \t %.5e \t %.5e \t %.5e \t %.5e \t %.5e\n' % (mu[0], mu[1], mu[2], mu[3], mu[4], mu[5]))
+    file.write('------ Modal Damping [used only if damp_type=2] --------------------------------\n')
+    file.write('6                      n_modes     - Number of modal damping coefficients (-)\n')
+    file.write('0.01 0.01 0.01 0.01 0.01 0.01 zeta         - Damping coefficients for mode 1 through n_modes\n')
     file.write(' ---------------------- DISTRIBUTED PROPERTIES---------------------------------\n')
 
     if flags_dict['flag_write_BeamDyn_unit_convert'] == 'mm_to_m':  # convert units from mm (yaml input) to m
