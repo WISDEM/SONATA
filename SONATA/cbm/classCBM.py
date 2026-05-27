@@ -19,6 +19,9 @@ import matplotlib.pyplot as plt
 import numpy as np
 from OCC.Core.gp import gp_Ax2
 
+# New library instead of ANBA4
+import b3_secfem
+
 # First party modules
 from SONATA.cbm.cbm_utl import trsf_sixbysix
 from SONATA.cbm.classBeamSectionalProps import BeamSectionalProps
@@ -51,8 +54,6 @@ from OCC.Core.gp import gp_Pnt2d
 
 try:
     from SONATA.anbax.anbax_utl import build_dolfin_mesh, anbax_recovery, ComputeShearCenter, ComputeTensionCenter
-    from anba4.anbax import anbax
-
 
 
 except:
@@ -591,7 +592,7 @@ class CBM(object):
 
 
         try:
-            (mesh, matLibrary, materials, plane_orientations, fiber_orientations, maxE) = build_dolfin_mesh(self.mesh, nodes, self.materials)
+            mysec = build_dolfin_mesh(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -602,9 +603,9 @@ class CBM(object):
 
 
         #TBD: pass it to anbax and run it!
-        anba = anbax(mesh, 1, matLibrary, materials, plane_orientations, fiber_orientations, maxE)
-        tmp_TS = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
-        tmp_MM = anba.inertia().getValues(range(6),range(6))    # get mass matrix
+        anba = b3_secfem.solve( mysec )
+        tmp_TS = anba.K    # get stiffness matrix
+        tmp_MM = anba.M    # get mass matrix
 
         # Define transformation T (from ANBA to SONATA/VABS coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
@@ -615,8 +616,8 @@ class CBM(object):
         self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
 
         # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
-        self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
-        self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+        self.BeamProperties.Xt = anba.tension_center
+        self.BeamProperties.Xs = anba.shear_center
 
 
         # --- Stress & Strain recovery --- #
@@ -651,9 +652,7 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            (mesh, matLibrary, materials, plane_orientations,
-             fiber_orientations, maxE) = build_dolfin_mesh(self.mesh,
-                                                       nodes, self.materials)
+            mysec = build_dolfin_mesh(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -664,11 +663,9 @@ class CBM(object):
 
 
         # Call ANBAX with baseline properties
-        anba = anbax(mesh, 1, matLibrary, materials, plane_orientations,
-                     fiber_orientations, maxE)
-
-        tmp_TS = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
-        tmp_MM = anba.inertia().getValues(range(6),range(6))    # get mass matrix
+        anba = b3_secfem.solve( mysec )
+        tmp_TS = anba.K    # get stiffness matrix
+        tmp_MM = anba.M    # get mass matrix
 
         # Define transformation T (from ANBA to SONATA/VABS coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])

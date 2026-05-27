@@ -3,11 +3,8 @@ channels:
   - defaults
 
 dependencies:
-  - fenics
-  - git
   - intervaltree
   - matplotlib
-  - mshr
   - openmdao
   - palettable
   - pint
@@ -16,9 +13,9 @@ dependencies:
   - pythonocc-core
   - pyyaml
   - pre-commit
-  - spyder
+  - shapely
+  - triangle
   - pip:
-    - shapely
     - triangle
     - windIO >=2.1,<3.0
 

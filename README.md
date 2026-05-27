@@ -27,19 +27,10 @@ You should do this in the folder that you want to clone SONATA to.
 
 ```
 conda config --add channels conda-forge
-conda config --add channels tpaviot
 git clone git@github.com:NLRWindSystems/SONATA.git
 cd SONATA
-```
-If you have a mac with a newer chip, run the following:
-```
-CONDA_SUBDIR=osx-64 conda env create --name sonata-env -f environment.yaml
-conda activate sonata-env
-conda config --env --set subdir osx-64 # run with sonata-env active.
-cd ..
-```
-Otherwise, you should be able to run:
-```
+git checkout wr1_b3
+
 conda env create --name sonata-env -f environment.yaml
 conda activate sonata-env
 cd ..

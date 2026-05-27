@@ -1,14 +1,12 @@
-
-# Third party modules
 import numpy as np
+from mpi4py import MPI
 
-try:
-    import dolfin
-    from anba4 import material
-except ImportError as error:
-    print(error.__class__.__name__ + ": " + error.message)
-except Exception as exception:
-    print(exception, False)
+import b3_secfem
+import basix.ufl
+import ufl
+from dolfinx import mesh as dmesh
+from dolfinx.mesh import meshtags
+
 
 def build_mat_library(cbm_materials):
 
@@ -20,30 +18,24 @@ def build_mat_library(cbm_materials):
     for m in cbm_materials.values():
         if m.orth == 0:
             maxE = max(m.E, maxE)
-            matMechanicProp = [m.E, m.nu]
-            mat = material.IsotropicMaterial(matMechanicProp, m.rho)
+            mat = b3_secfem.IsotropicMaterial(E=m.E, nu=m.nu, rho=m.rho)
         elif m.orth == 1:
-            matMechanicProp = np.zeros((3,3))
             maxE = max(m.E[0], maxE)
             maxE = max(m.E[1], maxE)
             maxE = max(m.E[2], maxE)
-            matMechanicProp[0,0] = m.E[1] #Exx
-            matMechanicProp[0,1] = m.E[2] #Eyy
-            matMechanicProp[0,2] = m.E[0] #Ezz
-            matMechanicProp[1,0] = m.G[1] #g_yz
-            matMechanicProp[1,1] = m.G[0] #g_xz
-            matMechanicProp[1,2] = m.G[2] #g_xy
-            matMechanicProp[2,0] = m.nu[1] #nu_zy
-            matMechanicProp[2,1] = m.nu[0] #nu_zx
-            matMechanicProp[2,2] = m.nu[2] #nu_xy
-            mat = material.OrthotropicMaterial(matMechanicProp, m.rho)
+            mat = b3_secfem.OrthotropicMaterial(E1=m.E[0], # Young's modulus, fibre [Pa] (Ezz along beam axis)
+                                                E2=m.E[1], # Young's modulus, transverse-2 [Pa]
+                                                E3=m.E[2], # Young's modulus, transverse-3 [Pa]
+                                                G12=m.G[0], G13=m.G[1], G23=m.G[2],
+                                                nu12=m.nu[0], nu13=m.nu[1], nu23=m.nu[2],
+                                                rho=m.rho, name=str(m.id))
         elif m.orth == 2:
             raise ValueError('material type 2 (anysotropic) not supported by Anba')
 
             #mat = material.
         matLibrary.append(mat)
         matdict[m.id] = matid
-        matid = matid + 1
+        matid += 1
     return matLibrary, matdict, maxE
 
 def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
@@ -75,37 +67,42 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     currently passed twice. But consistent with the export_cells_for_vabs.
 
     """
+    path = "temp.xdmf"
     (matLibrary, matdict, maxE) = build_mat_library(cbm_materials)
 
-    mesh = dolfin.Mesh()
-    me = dolfin.MeshEditor()
-    me.open(mesh, "triangle", 2, 2)
+    elem = basix.ufl.element("Lagrange", "triangle", 1, shape=(2,))
+    domain = ufl.Mesh(elem)
 
-    me.init_vertices(len(cbm_nodes))
-    for n in cbm_nodes:
-        me.add_vertex(n.id-1, n.coordinates)
+    
+    coords = np.array([n.coordinates for n in cbm_nodes])
+    tris = np.zeros((len(cbm_mesh), 3), dtype=np.int32)
+    for ic, c in enumerate(cbm_mesh):
+        tris[ic,:] = [n.id-1 for n in c.nodes]
+    mesh = dmesh.create_mesh(MPI.COMM_WORLD, tris, domain, coords)
+    
+    cell_map = mesh.topology.index_map(mesh.topology.dim)
+    n_cells = cell_map.size_local + cell_map.num_ghosts
+    cell_idx = np.arange(n_cells, dtype=np.int32)
+    
+    _ = meshtags(mesh, mesh.topology.dim, cell_idx, [matdict[cbm_mesh[0].MatID]]*n_cells)
+    
+    plane_orientations_vec = np.array([c.theta_1[0] for c in cbm_mesh])
+    _ = meshtags(mesh, mesh.topology.dim, cell_idx, plane_orientations_vec)
 
-    me.init_cells(len(cbm_mesh))
+    fiber_orientations_vec = np.array([c.theta_3 for c in cbm_mesh])
+    _ = meshtags(mesh, mesh.topology.dim, cell_idx, fiber_orientations_vec)
+
+    b3_secfem.write_xdmf(path, mesh)
+
+    rmats = {}
     for c in cbm_mesh:
-        me.add_cell(c.id-1, [n.id-1 for n in c.nodes])
+        rmats[c.id-1] = b3_secfem.RegionMat(matdict[c.MatID])#, beta_deg=c.theta_1[0], alpha_deg=[c.theta_3)
 
-    me.close()
-
-    materials = dolfin.MeshFunction("size_t", mesh, mesh.topology().dim())
-    fiber_orientations = dolfin.MeshFunction("double", mesh, mesh.topology().dim())
-    plane_orientations = dolfin.MeshFunction("double", mesh, mesh.topology().dim())
-
-    materials.set_all(0)
-    plane_orientations.set_all(0.0)
-    fiber_orientations.set_all(0.0)
-
-    for c in cbm_mesh:
-        materials[c.id-1] = matdict[c.MatID]
-        plane_orientations[c.id-1] = c.theta_1[0]  # rotation around x1-axis (equiv. to beam axis) in SONATA/VABS coordinates; Theta_11
-        fiber_orientations[c.id-1] = c.theta_3     # rotation around x3-axis in SONATA/VABS coordinates; Theta_3
-
-
-    return mesh, matLibrary, materials, plane_orientations, fiber_orientations, maxE
+    mysec = b3_secfem.SectionInput(mesh_path=path,
+                                   region_materials=rmats,
+                                   per_cell_beta_deg=plane_orientations_vec,
+                                   per_cell_alpha_deg=fiber_orientations_vec)
+    return mysec
 
 
 def anbax_recovery(anba, n_el, force, moment, voigt_convention, T):
@@ -134,18 +131,21 @@ def anbax_recovery(anba, n_el, force, moment, voigt_convention, T):
 
     """
 
-
+    fields = b3_secfem.recover_strains(anba)
+    tmp_StressF_vec = fields.sigma
+    tmp_StrainF_vec = fields.epsilon
+    
     # Stress field
-    anba.stress_field(force, moment, reference="global", voigt_convention=voigt_convention)  # get stress field in global sys
-    tmp_StressF_vec = np.array(anba.STRESS.vector().vec())  # global stress field
-    anba.stress_field(force, moment, reference="local", voigt_convention=voigt_convention)  # get stress field in local sys (material coordinates)
-    tmp_StressF_M_vec = np.array(anba.STRESS.vector().vec())  # local stress field
+    #anba.stress_field(force, moment, reference="global", voigt_convention=voigt_convention)  # get stress field in global sys
+    #tmp_StressF_vec = np.array(anba.STRESS.vector().vec())  # global stress field
+    #anba.stress_field(force, moment, reference="local", voigt_convention=voigt_convention)  # get stress field in local sys (material coordinates)
+    #tmp_StressF_M_vec = np.array(anba.STRESS.vector().vec())  # local stress field
 
     # Strain field
-    anba.strain_field(force, moment, reference="global", voigt_convention=voigt_convention)  # get strain field in global sys
-    tmp_StrainF_vec = np.array(anba.STRAIN.vector().vec())  # global strain field
-    anba.strain_field(force, moment, reference="local", voigt_convention=voigt_convention)  # get strain field in local sys (material coordinates)
-    tmp_StrainF_M_vec = np.array(anba.STRAIN.vector().vec())  # local strain field
+    #anba.strain_field(force, moment, reference="global", voigt_convention=voigt_convention)  # get strain field in global sys
+    #tmp_StrainF_vec = np.array(anba.STRAIN.vector().vec())  # global strain field
+    #anba.strain_field(force, moment, reference="local", voigt_convention=voigt_convention)  # get strain field in local sys (material coordinates)
+    #tmp_StrainF_M_vec = np.array(anba.STRAIN.vector().vec())  # local strain field
 
     # cd = anba.STRESS.function_space().dofmap().cell_dofs  # index numbers of cells from dolfin mesh that was used for stress recovery (each cell has 6 dofs)
 
@@ -199,14 +199,14 @@ def anbax_recovery(anba, n_el, force, moment, voigt_convention, T):
             tmp_StressF[i, :, :] = np.array([[s_11[i], s_12[i], s_13[i]], [s_12[i], s_22[i], s_23[i]], [s_13[i], s_23[i], s_33[i]]])
             tmp_StressF_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StressF[i]), T)  # transform to sonata coordinate system
             # stresses in "local" system
-            s_11_M[i] = tmp_StressF_M_vec[i * 6]
-            s_22_M[i] = tmp_StressF_M_vec[i * 6 + 1]
-            s_33_M[i] = tmp_StressF_M_vec[i * 6 + 2]
-            s_23_M[i] = tmp_StressF_M_vec[i * 6 + 3]  # equiv to s_23_M
-            s_13_M[i] = tmp_StressF_M_vec[i * 6 + 4]  # equiv to s_31_M
-            s_12_M[i] = tmp_StressF_M_vec[i * 6 + 5]  # equiv to s_21_M
-            tmp_StressF_M[i, :, :] = np.array([[s_11_M[i], s_12_M[i], s_13_M[i]], [s_12_M[i], s_22_M[i], s_23_M[i]], [s_13_M[i], s_23_M[i], s_33_M[i]]])
-            tmp_StressF_M_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StressF_M[i]), T)  # transform to sonata coordinate system
+            #s_11_M[i] = tmp_StressF_M_vec[i * 6]
+            #s_22_M[i] = tmp_StressF_M_vec[i * 6 + 1]
+            #s_33_M[i] = tmp_StressF_M_vec[i * 6 + 2]
+            #s_23_M[i] = tmp_StressF_M_vec[i * 6 + 3]  # equiv to s_23_M
+            #s_13_M[i] = tmp_StressF_M_vec[i * 6 + 4]  # equiv to s_31_M
+            #s_12_M[i] = tmp_StressF_M_vec[i * 6 + 5]  # equiv to s_21_M
+            #tmp_StressF_M[i, :, :] = np.array([[s_11_M[i], s_12_M[i], s_13_M[i]], [s_12_M[i], s_22_M[i], s_23_M[i]], [s_13_M[i], s_23_M[i], s_33_M[i]]])
+            #tmp_StressF_M_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StressF_M[i]), T)  # transform to sonata coordinate system
 
             # strains in "global" system
             e_11[i] = tmp_StrainF_vec[i * 6]
@@ -218,14 +218,14 @@ def anbax_recovery(anba, n_el, force, moment, voigt_convention, T):
             tmp_StrainF[i, :, :] = np.array([[e_11[i], e_12[i], e_13[i]], [e_12[i], e_22[i], e_23[i]], [e_13[i], e_23[i], e_33[i]]])
             tmp_StrainF_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StrainF[i]), T)  # transform to sonata coordinate system
             # strains in "local" system
-            e_11_M[i] = tmp_StrainF_M_vec[i * 6]
-            e_22_M[i] = tmp_StrainF_M_vec[i * 6 + 1]
-            e_33_M[i] = tmp_StrainF_M_vec[i * 6 + 2]
-            e_23_M[i] = tmp_StrainF_M_vec[i * 6 + 3]  # equiv to e_23_M
-            e_13_M[i] = tmp_StrainF_M_vec[i * 6 + 4]  # equiv to e_31_M
-            e_12_M[i] = tmp_StrainF_M_vec[i * 6 + 5]  # equiv to e_21_M
-            tmp_StrainF_M[i, :, :] = np.array([[e_11_M[i], e_12_M[i], e_13_M[i]], [e_12_M[i], e_22_M[i], e_23_M[i]], [e_13_M[i], e_23_M[i], e_33_M[i]]])
-            tmp_StrainF_M_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StrainF_M[i]), T)  # transform to sonata coordinate system
+            #e_11_M[i] = tmp_StrainF_M_vec[i * 6]
+            #e_22_M[i] = tmp_StrainF_M_vec[i * 6 + 1]
+            #e_33_M[i] = tmp_StrainF_M_vec[i * 6 + 2]
+            #e_23_M[i] = tmp_StrainF_M_vec[i * 6 + 3]  # equiv to e_23_M
+            #e_13_M[i] = tmp_StrainF_M_vec[i * 6 + 4]  # equiv to e_31_M
+            #e_12_M[i] = tmp_StrainF_M_vec[i * 6 + 5]  # equiv to e_21_M
+            #tmp_StrainF_M[i, :, :] = np.array([[e_11_M[i], e_12_M[i], e_13_M[i]], [e_12_M[i], e_22_M[i], e_23_M[i]], [e_13_M[i], e_23_M[i], e_33_M[i]]])
+            #tmp_StrainF_M_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StrainF_M[i]), T)  # transform to sonata coordinate system
 
             # cell_id[i, :] = cd(i)
     elif voigt_convention == "paraview":  # different ordering compared to "anba"; "paraview" ordering: [s_xx, s_yy, s_zz, s_xy, s_yz, s_xz]
