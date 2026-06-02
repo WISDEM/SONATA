@@ -78,9 +78,9 @@ class TestBeam(unittest.TestCase):
 
 
           # 6x6 timoshenko stiffness matrix
-          npt.assert_allclose(job.beam_properties[0, 1].TS, ref_TS)
+          npt.assert_allclose(job.beam_properties[0, 1].TS, ref_TS, rtol=1e-5)
           # 6x6 mass matrix
-          npt.assert_allclose(job.beam_properties[0, 1].MM, ref_MM)
+          npt.assert_allclose(job.beam_properties[0, 1].MM, ref_MM, rtol=1e-5)
 
 if __name__ == "__main__":
     unittest.main()

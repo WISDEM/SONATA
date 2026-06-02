@@ -83,7 +83,7 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     plane_orientations_vec = np.array([c.theta_1[0] for c in cbm_mesh])
     
     cell_dim = mesh.topology.dim
-    cell_tags = np.array([c.MatID for c in cbm_mesh])
+    cell_tags = np.array([c.MatID-1 for c in cbm_mesh])
     n_cells = cell_tags.size
     indices = np.arange(n_cells, dtype=np.int32)
     values = cell_tags.astype(np.int32)
@@ -94,16 +94,17 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
         xf.write_mesh(mesh)
         xf.write_meshtags(mt, mesh.geometry)
 
+    print(matLibrary)
     rmats = {}
     for c in cbm_mesh:
         #pdb.set_trace()
-        rmats[c.id-1] = b3_secfem.RegionMat(material=matLibrary[c.MatID-1])#,
-                                            #alpha_deg=float(c.theta_1[0]),
-                                            #beta_deg=float(c.theta_3))
+        rmats[c.id-1] = b3_secfem.RegionMat(material=matLibrary[c.MatID-1],
+                                            alpha_deg=float(c.theta_1[0]),
+                                            beta_deg=float(c.theta_3))
     mysec = b3_secfem.SectionInput(mesh_path=path,
-                                   region_materials=rmats,
-                                   per_cell_beta_deg=fiber_orientations_vec,
-                                   per_cell_alpha_deg=plane_orientations_vec)
+                                   region_materials=rmats)#,
+                                   #per_cell_alpha_deg=fiber_orientations_vec,
+                                   #per_cell_beta_deg=plane_orientations_vec)
         
     '''
     cell_map = mesh.topology.index_map(mesh.topology.dim)
