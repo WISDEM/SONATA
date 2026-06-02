@@ -1,44 +1,86 @@
-# pyproject.toml
-[tool.pytest.ini_options]
-testpaths = [
-    "tests",
+[build-system]
+requires = ["setuptools"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "SONATA"
+version = "0.3.6"
+authors = [{name = "Tobias Pflumm", email = "tobias.pflumm@tum.de"}]
+maintainers = [{name = "Pietro Bortolotti", email = "pietro.bortolotti@nlr.gov"}]
+description = "Multidiciplinary Rotor Blade Design Environment for Structural Optimization and Aeroelastic Analysis"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+keywords = ["Helicopter","Rotor Blade","OpenMdao","Preprocessor","SONATA","VABS","ANBA"]
+classifiers = [  # Optional
+  # How mature is this project? Common values are
+  #   3 - Alpha
+  #   4 - Beta
+  #   5 - Production/Stable
+  "Development Status :: 4 - Beta",
+
+  # Indicate who your project is intended for
+  "Intended Audience :: Science/Research",
+  "Topic :: Scientific/Engineering",
+
+  "License :: OSI Approved :: Apache Software License",
+
+  # Specify the Python versions you support here. In particular, ensure
+  # that you indicate you support Python 3. These classifiers are *not*
+  # checked by "pip install". See instead "python_requires" below.
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.9",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Fortran",
 ]
 
-[metadata]
-name = SONATA
+dependencies = [
+  "numpy",
+  "scipy",
+  "openmdao",
+  "windio",
+  "matplotlib",
+  "basix",
+  "ufl",
+  "OCC"
+]
+#  "dolfinx",
 
-version = 0.3.6
+[project.urls]  # Optional
+#"Homepage" = "https://gitlab.lrz.de/rfeil/SONATA"
+"Homepage" = "https://github.com/NLRWindSystems/SONATA"
+# This is configuration specific to the `setuptools` build backend.
+# If you are using a different build backend, you will need to change this.
 
-author = Tobias Pflumm
-author_email = tobias.pflumm@tum.de
-maintainer = Tobias Pflumm
-maintainer_email = tobias.pflumm@tum.de
+[tool.setuptools]
+zip-safe = true
+include-package-data = true
 
-platforms = Linux
-license = MIT
+#[tool.setuptools.packages]
+#find = {}
 
-url = https://gitlab.lrz.de/rfeil/SONATA
-# url = https://gitlab.lrz.de/gu32kij/SONATA
-#download_url = https://gitlab.lrz.de/gu32kij/SONATA
+[tool.setuptools.packages.find]
+exclude = ["docs", "test"]
+namespaces = true
 
-description = Multidiciplinary Rotor Blade Design Environment for Structural Optimization and Aeroelastic Analysis
-long_description = file: README.md
-long_descriptison_content_type = text/markdown
+[tool.setuptools.package-data]
+# If there are data files included in your packages that need to be
+# installed, specify them here.
+"*" = ["*.yaml", "*.xlsx", "*.txt"]
 
-keywords =
-    Helicopter
-    Rotor Blade
-    OpenMdao
-    Preprocessor
-    SONATA
-    VABS
-
-[options]
-packages = find:
-
-[tool:pytest]
-addopts = --doctest-modules
+[tool.pytest]
+addopts = ["--doctest-modules"]
+testpaths = ["tests"]
 
 [pydocstyle]
-convention=numpy
-match_dir = SONATA
+convention = "numpy"
+match_dir = "SONATA"
+
+[tool.cibuildwheel]
+skip = ["cp36-*", "cp37-*", "cp38-*", "*-win32"]
+build-frontend = "build"

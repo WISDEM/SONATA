@@ -6,7 +6,9 @@ import basix.ufl
 import ufl
 from dolfinx import mesh as dmesh
 from dolfinx.mesh import meshtags
+from dolfinx import io
 
+import pdb
 
 def build_mat_library(cbm_materials):
 
@@ -17,12 +19,8 @@ def build_mat_library(cbm_materials):
     matdict = {}
     for m in cbm_materials.values():
         if m.orth == 0:
-            maxE = max(m.E, maxE)
-            mat = b3_secfem.IsotropicMaterial(E=m.E, nu=m.nu, rho=m.rho)
+            mat = b3_secfem.IsotropicMaterial(E=m.E, nu=m.nu, rho=m.rho, name=str(m.id))
         elif m.orth == 1:
-            maxE = max(m.E[0], maxE)
-            maxE = max(m.E[1], maxE)
-            maxE = max(m.E[2], maxE)
             mat = b3_secfem.OrthotropicMaterial(E1=m.E[0], # Young's modulus, fibre [Pa] (Ezz along beam axis)
                                                 E2=m.E[1], # Young's modulus, transverse-2 [Pa]
                                                 E3=m.E[2], # Young's modulus, transverse-3 [Pa]
@@ -33,6 +31,7 @@ def build_mat_library(cbm_materials):
             raise ValueError('material type 2 (anysotropic) not supported by Anba')
 
             #mat = material.
+        maxE = np.maximum(maxE, np.array(m.E).max())
         matLibrary.append(mat)
         matdict[m.id] = matid
         matid += 1
@@ -79,29 +78,58 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     for ic, c in enumerate(cbm_mesh):
         tris[ic,:] = [n.id-1 for n in c.nodes]
     mesh = dmesh.create_mesh(MPI.COMM_WORLD, tris, domain, coords)
+
+    fiber_orientations_vec = np.array([c.theta_3 for c in cbm_mesh])
+    plane_orientations_vec = np.array([c.theta_1[0] for c in cbm_mesh])
     
+    cell_dim = mesh.topology.dim
+    cell_tags = np.array([c.MatID for c in cbm_mesh])
+    n_cells = cell_tags.size
+    indices = np.arange(n_cells, dtype=np.int32)
+    values = cell_tags.astype(np.int32)
+    mesh.topology.create_connectivity(cell_dim, cell_dim)
+    mt = meshtags(mesh, cell_dim, indices, values)
+    mt.name = "cell_tags"
+    with io.XDMFFile(mesh.comm, str(path), "w") as xf:
+        xf.write_mesh(mesh)
+        xf.write_meshtags(mt, mesh.geometry)
+
+    rmats = {}
+    for c in cbm_mesh:
+        #pdb.set_trace()
+        rmats[c.id-1] = b3_secfem.RegionMat(material=matLibrary[c.MatID-1])#,
+                                            #alpha_deg=float(c.theta_1[0]),
+                                            #beta_deg=float(c.theta_3))
+    mysec = b3_secfem.SectionInput(mesh_path=path,
+                                   region_materials=rmats,
+                                   per_cell_beta_deg=fiber_orientations_vec,
+                                   per_cell_alpha_deg=plane_orientations_vec)
+        
+    '''
     cell_map = mesh.topology.index_map(mesh.topology.dim)
     n_cells = cell_map.size_local + cell_map.num_ghosts
     cell_idx = np.arange(n_cells, dtype=np.int32)
     
     _ = meshtags(mesh, mesh.topology.dim, cell_idx, [matdict[cbm_mesh[0].MatID]]*n_cells)
     
-    plane_orientations_vec = np.array([c.theta_1[0] for c in cbm_mesh])
     _ = meshtags(mesh, mesh.topology.dim, cell_idx, plane_orientations_vec)
 
-    fiber_orientations_vec = np.array([c.theta_3 for c in cbm_mesh])
     _ = meshtags(mesh, mesh.topology.dim, cell_idx, fiber_orientations_vec)
 
     b3_secfem.write_xdmf(path, mesh)
 
     rmats = {}
     for c in cbm_mesh:
-        rmats[c.id-1] = b3_secfem.RegionMat(matdict[c.MatID])#, beta_deg=c.theta_1[0], alpha_deg=[c.theta_3)
+        #pdb.set_trace()
+        rmats[c.id-1] = b3_secfem.RegionMat(material=matLibrary[c.MatID-1],
+                                            beta_deg=float(c.theta_1[0]),
+                                            alpha_deg=float(c.theta_3))
 
     mysec = b3_secfem.SectionInput(mesh_path=path,
                                    region_materials=rmats,
                                    per_cell_beta_deg=plane_orientations_vec,
                                    per_cell_alpha_deg=fiber_orientations_vec)
+    '''
     return mysec
 
 
