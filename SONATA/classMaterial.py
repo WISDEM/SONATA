@@ -8,6 +8,8 @@ from collections import OrderedDict
 # Third party modules
 import numpy as np
 
+import b3_secfem
+
 
 #------------------------------------------------------------------------------------
 # Material class
@@ -42,7 +44,7 @@ class Material:
 
     """
 
-    __slots__ = ("id", "name", "description", "source", "orth", "rho")
+    __slots__ = ("id", "name", "description", "source", "orth", "rho", "b3mat")
 
     def __init__(self, ID="NOID", name="noname", description="nodescription", source="nosource", orth=None, rho=0, **kwargs):
         self.id = ID
@@ -51,6 +53,7 @@ class Material:
         self.source = source
         self.orth = orth
         self.rho = float(rho)
+        self.b3mat = None
 
     def __repr__(self):
         if self.orth == 0:
@@ -83,11 +86,12 @@ class Material:
         (e.g., gamma_ij = 2*eps_ij = eps_ij + eps_ji) for use with this tensor.
 
         """
+        if self.b3mat is not None:
+            return self.b3mat.C_local()
+        else:
+            return np.zeros((6,6))
 
-        return np.zeros((6,6))
-
-    def rotated_constitutive_tensor(self, plane_orientation,
-                                    fiber_orientation):
+    def rotated_constitutive_tensor(self, plane_orientation, fiber_orientation):
         """
         Transforms the material constitutive tensor from material to global
         coordinate system.
@@ -223,13 +227,13 @@ class IsotropicMaterial(Material):
 
     def __init__(self, **kw):
         kw["orth"] = 0
-        Material.__init__(self, **kw)
+        super().__init__(**kw)
         self.E = None
         self.nu = None
         self.alpha = None
         self.YS = None
         self.UTS = None
-
+        
         if kw.get("E") is not None:
             self.E = float(kw.get("E"))
 
@@ -246,7 +250,10 @@ class IsotropicMaterial(Material):
             self.UTS = float(kw.get("UTS"))
 
         self.viscoelastic = {}
+        self.b3mat = b3_secfem.IsotropicMaterial(E=self.E, nu=self.nu, rho=self.rho, name=self.name)
 
+    '''
+    # Using the abstract version that calls the b3_secfem materials class instead
     def constitutive_tensor(self):
         """
         Calculate the local consitutive tensor for the material.
@@ -304,6 +311,7 @@ class IsotropicMaterial(Material):
         constitutive_tensor[5, 5] = G
 
         return constitutive_tensor
+    '''
 
 #------------------------------------------------------------------------------------
 # OrthotropicMaterial class
@@ -424,7 +432,28 @@ class OrthotropicMaterial(Material):
         # self.S23 = float(kw.get('S23'))
 
         self.viscoelastic = {}
+        
+        # Default b3_secfem coordinate system with fiber axis on E1
+        #E1, E2, E3 = self.E #[0], m.E[1], m.E[2]
+        #G12, G13, G23 = self.G #[0], m.G[1], m.G[2]
+        #nu12, nu13, nu23 = self.nu #[0], m.nu[1], m.nu[2]
 
+        # If trying to trick b3_secfem to give results like Anba that has fiber axis on E3:
+        E1, E2, E3 = self.E[1], self.E[2], self.E[0]
+        G12, G13, G23 = self.G[2], self.G[0], self.G[1]
+        nu12, nu31, nu32 = self.nu[2], self.nu[0], self.nu[1]
+        nu13 = nu31*E1/E3
+        nu23 = nu32*E2/E3
+        
+        self.b3mat = b3_secfem.OrthotropicMaterial(E1=E1, # Young's modulus, fibre [Pa] (Ezz along beam axis)
+                                            E2=E2, # Young's modulus, transverse-2 [Pa]
+                                            E3=E3, # Young's modulus, transverse-3 [Pa]
+                                            G12=G12, G13=G13, G23=G23,
+                                            nu12=nu12, nu13=nu13, nu23=nu23,
+                                            rho=self.rho, name=self.name)
+
+    '''
+    # Using the abstract version that calls the b3_secfem materials class instead
     def constitutive_tensor(self):
         """
         Calculate the local consitutive tensor for the material.
@@ -454,7 +483,7 @@ class OrthotropicMaterial(Material):
         extra calculations for viscoelastic materials.
 
         Directions should be consistent with:
-            https://windio.readthedocs.io/en/latest/source/materials.html
+            https://ieawindsystems.github.io/windIO/main/source/detailed_turbine_documentation.html#materials
 
         """
 
@@ -466,6 +495,7 @@ class OrthotropicMaterial(Material):
         #   [Along Beam, Along Perimeter, Through Thickness]
         # Assuming no fiber orientation rotation angle.
 
+        # If hacking b3_secfem to look
         e_xx = self.E[1]
         e_yy = self.E[2]
         e_zz = self.E[0]
@@ -506,6 +536,7 @@ class OrthotropicMaterial(Material):
         constitutive_tensor[5, 5] = g_xy
 
         return constitutive_tensor
+    '''
 
 
 #------------------------------------------------------------------------------------

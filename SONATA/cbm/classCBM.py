@@ -592,7 +592,7 @@ class CBM(object):
 
 
         try:
-            mysec = build_dolfin_mesh(self.mesh, nodes, self.materials)
+            anba = build_dolfin_mesh(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -603,7 +603,6 @@ class CBM(object):
 
 
         #TBD: pass it to anbax and run it!
-        anba = b3_secfem.solve( mysec )
         tmp_TS = anba.K    # get stiffness matrix
         tmp_MM = anba.M    # get mass matrix
 
@@ -652,7 +651,7 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            mysec = build_dolfin_mesh(self.mesh, nodes, self.materials)
+            anba = build_dolfin_mesh(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -663,7 +662,6 @@ class CBM(object):
 
 
         # Call ANBAX with baseline properties
-        anba = b3_secfem.solve( mysec )
         tmp_TS = anba.K    # get stiffness matrix
         tmp_MM = anba.M    # get mass matrix
 
@@ -676,8 +674,10 @@ class CBM(object):
         self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
 
         # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
-        self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
-        self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+        #self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
+        #self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+        self.BeamProperties.Xt = anba.tension_center
+        self.BeamProperties.Xs = anba.shear_center
 
         # Recover the mapping from sectional Forces and Moments to Strain
         # in a non-invasive way from ANBA
@@ -945,9 +945,7 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            (mesh, matLibrary, materials, plane_orientations,
-             fiber_orientations, maxE) = build_dolfin_mesh(self.mesh,
-                                                       nodes, self.materials)
+            anba = build_dolfin_mesh(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -955,16 +953,6 @@ class CBM(object):
             print('Anba4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
             raise
-
-
-        # Call ANBAX with baseline properties
-        anba = anbax(mesh, 1, matLibrary, materials, plane_orientations,
-                     fiber_orientations, maxE)
-
-        # These lines are necessary for what happens in the objects
-        # not for this outputs here.
-        _ = anba.compute().getValues(range(6),range(6))    # get stiffness matrix
-        _ = anba.inertia().getValues(range(6),range(6))    # get mass matrix
 
         # Define transformation T (from ANBA to SONATA/VABS coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
