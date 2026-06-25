@@ -219,7 +219,7 @@ class Blade(Component):
 
                 # Validate compatible windIO version
                 windIO_vers = importlib.metadata.version("windIO")
-                windIO_tuple = tuple(map(int, windIO_vers.split('.')))
+                windIO_tuple = tuple(map(int, windIO_vers.split('.')[:3]))
 
                 input_vers_tuple = tuple(map(int, yml['windIO_version'].split('.')))
 

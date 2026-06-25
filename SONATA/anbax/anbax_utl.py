@@ -44,7 +44,7 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     domain = ufl.Mesh(elem)
 
     coords = np.zeros((len(cbm_nodes), 2))
-    for n in cbm_nodes:
+    for kn, n in enumerate(cbm_nodes):
         coords[n.id-1,:] = n.coordinates
         
     n_cells = len(cbm_mesh)
@@ -52,18 +52,24 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     fiber_orientations = np.zeros(n_cells)
     plane_orientations = np.zeros(n_cells)
     materials_vec = [None] * n_cells
-    for c in cbm_mesh:
+    for ic, c in enumerate(cbm_mesh):
         tris[c.id-1,:] = [n.id-1 for n in c.nodes]
         # Suspicion that these SONATA angles are not computed correctly, so enforcing zeros
-        #fiber_orientations[c.id-1] = c.theta_3
-        #plane_orientations[c.id-1] = c.theta_1[0]
+        plane_orientations[c.id-1] = c.theta_1[0]
+        fiber_orientations[c.id-1] = c.theta_3
         materials_vec[c.id-1] = matLibrary[c.MatID-1]
-        
+
     mesh = dmesh.create_mesh(MPI.COMM_WORLD, tris, domain, coords)
     
     cell_dim = mesh.topology.dim
+    oci = np.asarray(mesh.topology.original_cell_index)
+    materials_vec = [materials_vec[m] for m in oci]
+    fiber_orientations = fiber_orientations[oci]
+    plane_orientations = plane_orientations[oci]
+    
     # This meshtag doesn't do anything if not using the "region_mat" approach, but code complains if no tags are given
-    values = indices = np.array([c.id-1 for c in cbm_mesh], dtype=np.int32)
+    indices = np.arange(n_cells, dtype=np.int32)
+    values = np.array([c.id-1 for c in cbm_mesh], dtype=np.int32)
     mesh.topology.create_connectivity(cell_dim, cell_dim)
     mt = meshtags(mesh, cell_dim, indices, values)
     mt.name = "cell_tags"
@@ -72,10 +78,10 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
         xf.write_meshtags(mt, mesh.geometry)
 
     mysec = b3_secfem.SectionInput(mesh_path=path,
-                                   degree=2,
+                                   degree=1,
                                    per_cell_material=materials_vec,
-                                   per_cell_beta_deg=fiber_orientations,
-                                   per_cell_alpha_deg=plane_orientations+90)
+                                   per_cell_alpha_deg=fiber_orientations,
+                                   per_cell_beta_deg=plane_orientations)
     
     return b3_secfem.solve( mysec )
 

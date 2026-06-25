@@ -434,16 +434,16 @@ class OrthotropicMaterial(Material):
         self.viscoelastic = {}
         
         # Default b3_secfem coordinate system with fiber axis on E1
-        #E1, E2, E3 = self.E #[0], m.E[1], m.E[2]
-        #G12, G13, G23 = self.G #[0], m.G[1], m.G[2]
-        #nu12, nu13, nu23 = self.nu #[0], m.nu[1], m.nu[2]
+        E1, E2, E3 = self.E #[0], m.E[1], m.E[2]
+        G12, G13, G23 = self.G #[0], m.G[1], m.G[2]
+        nu12, nu13, nu23 = self.nu #[0], m.nu[1], m.nu[2]
 
         # If trying to trick b3_secfem to give results like Anba that has fiber axis on E3:
-        E1, E2, E3 = self.E[1], self.E[2], self.E[0]
-        G12, G13, G23 = self.G[2], self.G[0], self.G[1]
-        nu12, nu31, nu32 = self.nu[2], self.nu[0], self.nu[1]
-        nu13 = nu31*E1/E3
-        nu23 = nu32*E2/E3
+        #E1, E2, E3 = self.E[1], self.E[2], self.E[0]
+        #G12, G13, G23 = self.G[2], self.G[0], self.G[1]
+        #nu12, nu31, nu32 = self.nu[2], self.nu[0], self.nu[1]
+        #nu13 = nu31*E1/E3
+        #nu23 = nu32*E2/E3
         
         self.b3mat = b3_secfem.OrthotropicMaterial(E1=E1, # Young's modulus, fibre [Pa] (Ezz along beam axis)
                                             E2=E2, # Young's modulus, transverse-2 [Pa]
