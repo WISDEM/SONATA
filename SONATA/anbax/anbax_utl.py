@@ -38,13 +38,14 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     """
     # Would like to avoid writing mesh to a file in the future, but for now just give dummy name
     path = "dolfinx_temp_mesh.xdmf"
+
     matLibrary = [cbm_materials[m].b3mat for m in cbm_materials]
 
     elem = basix.ufl.element("Lagrange", "triangle", 1, shape=(2,))
     domain = ufl.Mesh(elem)
 
     coords = np.zeros((len(cbm_nodes), 2))
-    for kn, n in enumerate(cbm_nodes):
+    for n in cbm_nodes:
         coords[n.id-1,:] = n.coordinates
         
     n_cells = len(cbm_mesh)
@@ -52,16 +53,18 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     fiber_orientations = np.zeros(n_cells)
     plane_orientations = np.zeros(n_cells)
     materials_vec = [None] * n_cells
-    for ic, c in enumerate(cbm_mesh):
+    for c in cbm_mesh:
         tris[c.id-1,:] = [n.id-1 for n in c.nodes]
-        # Suspicion that these SONATA angles are not computed correctly, so enforcing zeros
         plane_orientations[c.id-1] = c.theta_1[0]
         fiber_orientations[c.id-1] = c.theta_3
         materials_vec[c.id-1] = matLibrary[c.MatID-1]
 
+    # Create the dolfinx mesh
     mesh = dmesh.create_mesh(MPI.COMM_WORLD, tris, domain, coords)
-    
-    cell_dim = mesh.topology.dim
+
+    # Any dolfinx mesh creation or write-read sequence reorders the elements,
+    # so we have to keep up with the changes.
+    # b3_secfem does this after it reads the mesh, so that step is taken care of, but need to do it here too
     oci = np.asarray(mesh.topology.original_cell_index)
     materials_vec = [materials_vec[m] for m in oci]
     fiber_orientations = fiber_orientations[oci]
@@ -70,13 +73,17 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
     # This meshtag doesn't do anything if not using the "region_mat" approach, but code complains if no tags are given
     indices = np.arange(n_cells, dtype=np.int32)
     values = np.array([c.id-1 for c in cbm_mesh], dtype=np.int32)
+    cell_dim = mesh.topology.dim
     mesh.topology.create_connectivity(cell_dim, cell_dim)
     mt = meshtags(mesh, cell_dim, indices, values)
     mt.name = "cell_tags"
+
+    # Write mesh to file
     with io.XDMFFile(mesh.comm, str(path), "w") as xf:
         xf.write_mesh(mesh)
         xf.write_meshtags(mt, mesh.geometry)
 
+    # Create the b3_secfem section structure and return the solution
     mysec = b3_secfem.SectionInput(mesh_path=path,
                                    degree=1,
                                    per_cell_material=materials_vec,
