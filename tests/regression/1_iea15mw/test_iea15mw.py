@@ -352,4 +352,3 @@ class TestBeam(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-    #pytest.main(["-s", "test_iea15mw.py"])

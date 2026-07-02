@@ -7,7 +7,6 @@ import matplotlib
 import matplotlib.pyplot as plt
 
 import sys
-#import pytest
 import unittest
 
 sys.path.append(os.path.dirname(os.path.dirname( os.path.realpath(__file__)) ))
@@ -150,4 +149,3 @@ class TestBeam(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-    #pytest.main(["-s", "test_rotated_beam.py"])

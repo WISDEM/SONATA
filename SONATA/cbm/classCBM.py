@@ -19,9 +19,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 from OCC.Core.gp import gp_Ax2
 
-# New library instead of ANBA4
-import b3_secfem
-
 # First party modules
 from SONATA.cbm.cbm_utl import trsf_sixbysix
 from SONATA.cbm.classBeamSectionalProps import BeamSectionalProps
@@ -53,7 +50,7 @@ from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
 from OCC.Core.gp import gp_Pnt2d
 
 try:
-    from SONATA.anbax.anbax_utl import build_dolfin_mesh, anbax_recovery, ComputeShearCenter, ComputeTensionCenter
+    from SONATA.anbax.anbax_utl import dolfin_solve, anbax_unit_recovery, anbax_recovery
 
 
 except:
@@ -592,7 +589,7 @@ class CBM(object):
 
 
         try:
-            anba = build_dolfin_mesh(self.mesh, nodes, self.materials)
+            anba = dolfin_solve(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -614,7 +611,7 @@ class CBM(object):
         self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
         self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
 
-        # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
+        # self.BeamProperties.Xm = anba.mass_center  # mass center - is already allocated from mass matrix
         self.BeamProperties.Xt = anba.tension_center
         self.BeamProperties.Xs = anba.shear_center
 
@@ -622,18 +619,15 @@ class CBM(object):
         # --- Stress & Strain recovery --- #
         if  self.config.anbax_cfg.recover_flag:
             print("STATUS:\t Running ANBAX Stress & Strain Recovery:")
-            [tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran] = \
-                anbax_recovery(anba, len(self.mesh), self.config.anbax_cfg.F.tolist(), self.config.anbax_cfg.M.tolist(), self.config.anbax_cfg.voigt_convention, T)
+            elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, self.config.anbax_cfg.F.tolist(), self.config.anbax_cfg.M.tolist(), T)
 
-            # ASSIGN stresses and strains to mesh elements:
+            # ASSIGN stresses and strains to mesh elements in np.triu_indices_from order
             for i,c in enumerate(self.mesh):
-                #                  [s_11[i],                   s_12[i],                   s_13[i],                   s_22[i],                   s_23[i],                   s_33[i]])
-                c.stress =  Stress([tmp_StressF_tran[i,0,0],   tmp_StressF_tran[i,0,1],   tmp_StressF_tran[i,0,2],   tmp_StressF_tran[i,1,1],   tmp_StressF_tran[i,1,2],   tmp_StressF_tran[i,2,2]])
-                c.stressM = Stress([tmp_StressF_M_tran[i,0,0], tmp_StressF_M_tran[i,0,1], tmp_StressF_M_tran[i,0,2], tmp_StressF_M_tran[i,1,1], tmp_StressF_M_tran[i,1,2], tmp_StressF_M_tran[i,2,2]])
-                #                  [e_11[i],                   e_12[i],                   e_13[i],                   e_22[i],                   e_23[i],                   e_33[i]])
-                c.strain =  Strain([tmp_StrainF_tran[i,0,0],   tmp_StrainF_tran[i,0,1],   tmp_StrainF_tran[i,0,2],   tmp_StrainF_tran[i,1,1],   tmp_StrainF_tran[i,1,2],   tmp_StrainF_tran[i,2,2]])
-                c.strainM = Strain([tmp_StrainF_M_tran[i,0,0], tmp_StrainF_M_tran[i,0,1], tmp_StrainF_M_tran[i,0,2], tmp_StrainF_M_tran[i,1,1], tmp_StrainF_M_tran[i,1,2], tmp_StrainF_M_tran[i,2,2]])
-
+                #                  [s_11[i],           s_12[i],           s_13[i],           s_22[i],           s_23[i],           s_33[i]])
+                c.stress =  Stress([elem_stress[ i,0], elem_stress[ i,5], elem_stress[ i,4], elem_stress[ i,1], elem_stress[ i,3], elem_stress[i,2]])
+                c.strain =  Strain([elem_strain[ i,0], elem_strain[ i,5], elem_strain[ i,4], elem_strain[ i,1], elem_strain[ i,3], elem_strain[i,2]])
+                c.stressM = Stress([elem_stressM[i,0], elem_stressM[i,5], elem_stressM[i,4], elem_stressM[i,1], elem_stressM[i,3], elem_stressM[i,2]])
+                c.strainM = c.strain
 
         return
 
@@ -651,7 +645,7 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            anba = build_dolfin_mesh(self.mesh, nodes, self.materials)
+            anba = dolfin_solve(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -673,20 +667,17 @@ class CBM(object):
         self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
         self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
 
-        # self.BeamProperties.Xm = np.array(ComputeMassCenter(self.BeamProperties.MM))  # mass center - is already allocated from mass matrix
-        #self.BeamProperties.Xt = np.array(ComputeTensionCenter(self.BeamProperties.TS)) # tension center
-        #self.BeamProperties.Xs = np.array(ComputeShearCenter(self.BeamProperties.TS))   # shear center
+        # self.BeamProperties.Xm = anba.mass_center  # mass center - is already allocated from mass matrix
         self.BeamProperties.Xt = anba.tension_center
         self.BeamProperties.Xs = anba.shear_center
-
+        #print(self.BeamProperties.TS)
+        #print(self.BeamProperties.MM)
+        #print(self.BeamProperties.Xt)
+        #print(self.BeamProperties.Xs)
+        
         # Recover the mapping from sectional Forces and Moments to Strain
         # in a non-invasive way from ANBA
-
-        # 1. Initialize memory on each element to store the mapping
-        # ASSIGN stresses and strains to mesh elements:
-        for i,c in enumerate(self.mesh):
-
-            c.fm_to_strain = np.zeros((6,6))
+        elem_stress, _, elem_strain = anbax_unit_recovery(anba, T)
 
         # Reordering is necessary from the conventional stress/strain order
         # to match the constitutive tensor built from ANBAX.
@@ -694,58 +685,20 @@ class CBM(object):
         # All other orders here were tested and verified to give wrong results.
         reorder_stress_strain = np.array([1, 2, 0, 4, 5, 3])
 
-        # 2. Call ANBA looping over unit forces/moments
-        for i in range(6):
+        # ASSIGN stresses and strains to mesh elements:
+        for ic,c in enumerate(self.mesh):
+            istrain = elem_strain[:,ic,:].T # Swap rows and columns so voigt matrix is first index
+            c.fm_to_strain = istrain[reorder_stress_strain,:]
+            #print(ic, c.fm_to_strain)
 
-            F = [0.0, 0.0, 0.0]
-            M = [0.0, 0.0, 0.0]
-
-            if i < 3:
-                F[i] = 1.0
-            else:
-                M[i - 3] = 1.0
-
-            # This ends up being potentially excessively slow since
-            # it does a new calculation for each stress and strain field (4),
-            # but only need the global coordinate strain field.
-            [tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran] = \
-                anbax_recovery(anba, len(self.mesh), F, M,
-                               self.config.anbax_cfg.voigt_convention, T)
-
-
-            # 3. Store Strain results in each case / element
-            for j,c in enumerate(self.mesh):
-
-                # This creates a Strain class object that clearly identifies
-                # elasticity strain tensor components (epsilon) versus
-                # engineering shear strain components (gamma).
-                # While is is probably unneccesary for computation, it is done for
-                # code clarity.
-                curr_strain = Strain([tmp_StrainF_tran[j,0,0],
-                                      tmp_StrainF_tran[j,0,1],
-                                      tmp_StrainF_tran[j,0,2],
-                                      tmp_StrainF_tran[j,1,1],
-                                      tmp_StrainF_tran[j,1,2],
-                                      tmp_StrainF_tran[j,2,2]])
-
-                strain_vec = np.array([curr_strain.epsilon11,
-                                             curr_strain.epsilon22,
-                                             curr_strain.epsilon33,
-                                             curr_strain.gamma23,
-                                             curr_strain.gamma13,
-                                             curr_strain.gamma12])
-
-                c.fm_to_strain[:, i] = strain_vec[reorder_stress_strain]
-
-        # 4. Create a material dictionary for each time scale.
-        #    The will loop over those time scales
+        # Create a material dictionary for each time scale.
+        # The will loop over those time scales
         time_scale_list = []
 
         for MatID in self.materials:
 
             if not (self.materials[MatID].viscoelastic == {}):
-                time_scale_list += self.materials[MatID]\
-                                    .viscoelastic['time_scales_v']
+                time_scale_list += self.materials[MatID].viscoelastic['time_scales_v']
 
         time_scale_list = np.sort(np.unique(time_scale_list)).tolist()
 
@@ -801,7 +754,7 @@ class CBM(object):
                                                                 **curr_dict)
             time_scale_mat_dicts[i] = curr_materials
 
-        # 5. calculate integrated element contributions
+        # Calculate integrated element contributions
         # This mapping is just the partial product that maps force/moments
         # back to forces/moments (or time derivatives to be integrated)
         viscoelastic_6x6 = len(time_scale_list) * [None]
@@ -945,7 +898,7 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            anba = build_dolfin_mesh(self.mesh, nodes, self.materials)
+            anba = dolfin_solve(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
@@ -957,7 +910,6 @@ class CBM(object):
         # Define transformation T (from ANBA to SONATA/VABS coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
-
 
         fc_to_strain_m = np.zeros((6,6,len(self.mesh)))
         fc_to_stress_m = np.zeros((6,6,len(self.mesh)))
@@ -994,57 +946,18 @@ class CBM(object):
                           [0,  np.cos(twist), -np.sin(twist)],
                           [0,  np.sin(twist),  np.cos(twist)]])
 
-            F = R @ F
-            M = R @ M
-
             # rearrange to internal indices
-            F[external_to_internal_ind] = np.copy(F)
-            M[external_to_internal_ind] = np.copy(M)
+            F[external_to_internal_ind] = R @ F.copy()
+            M[external_to_internal_ind] = R @ M.copy()
 
             # This ends up being potentially excessively slow since
             # it does a new calculation for each stress and strain field (4),
             # but only need the material coordinate strain field.
-            [tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran] = \
-                anbax_recovery(anba, len(self.mesh), F, M,
-                               self.config.anbax_cfg.voigt_convention, T)
-
+            elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, F, M, T)
 
             # 3. Store Strain results in each case / element
-            for j,c in enumerate(self.mesh):
-
-                # This creates a Strain class object that clearly identifies
-                # elasticity strain tensor components (epsilon) versus
-                # engineering shear strain components (gamma).
-                # While is is probably unneccesary for computation, it is done for
-                # code clarity.
-                curr_strain = Strain([tmp_StrainF_M_tran[j,0,0],
-                                      tmp_StrainF_M_tran[j,0,1],
-                                      tmp_StrainF_M_tran[j,0,2],
-                                      tmp_StrainF_M_tran[j,1,1],
-                                      tmp_StrainF_M_tran[j,1,2],
-                                      tmp_StrainF_M_tran[j,2,2]])
-
-
-                curr_stress = Stress([tmp_StressF_M_tran[j,0,0],
-                                      tmp_StressF_M_tran[j,0,1],
-                                      tmp_StressF_M_tran[j,0,2],
-                                      tmp_StressF_M_tran[j,1,1],
-                                      tmp_StressF_M_tran[j,1,2],
-                                      tmp_StressF_M_tran[j,2,2]])
-
-                fc_to_strain_m[:, i, j] = np.array([curr_strain.epsilon11,
-                                                    curr_strain.epsilon22,
-                                                    curr_strain.epsilon33,
-                                                    curr_strain.gamma23,
-                                                    curr_strain.gamma13,
-                                                    curr_strain.gamma12])
-
-                fc_to_stress_m[:, i, j] = np.array([curr_stress.sigma11,
-                                                    curr_stress.sigma22,
-                                                    curr_stress.sigma33,
-                                                    curr_stress.sigma23,
-                                                    curr_stress.sigma13,
-                                                    curr_stress.sigma12])
+            fc_to_strain_m[:, i, :] = elem_strain.T
+            fc_to_stress_m[:, i, :] = elem_stressM.T
 
         # Save the material names as strings to be output
         material_names = (np.max([mat for mat in self.materials]) + 1)*['None']

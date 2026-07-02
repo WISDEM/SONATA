@@ -110,15 +110,14 @@ def compare_bd_blade(ref_path, test_path, abs_tolerance=1e-8):
         print("Stiffness error: {:}".format(
             np.abs(stiff_ref[i]-stiff_test[i]).max() / stiff_ref[i].max()))
 
-        #print(stiff_test)
-        npt.assert_allclose(stiff_test[i], stiff_ref[i], rtol=1e-2, atol=abs_tolerance*stiff_ref[i].max())
-        #"Stiffness matrix does not match at station index {:}.".format(i)
+        npt.assert_allclose(stiff_test[i], stiff_ref[i], rtol=1e-2, atol=abs_tolerance*stiff_ref[i].max(),
+                            err_msg="Stiffness matrix does not match at station index {:}.".format(i))
 
         print("Mass error: {:}".format(
             np.abs(mass_ref[i]-mass_test[i]).max() / mass_ref[i].max()))
 
-        npt.assert_allclose(mass_test[i], mass_ref[i], rtol=1e-2, atol=abs_tolerance*mass_ref[i].max())
-        #"Mass matrix does not match at station index {:}.".format(i)
+        npt.assert_allclose(mass_test[i], mass_ref[i], rtol=1e-2, atol=abs_tolerance*mass_ref[i].max(),
+                            err_msg="Mass matrix does not match at station index {:}.".format(i))
 
     return
 

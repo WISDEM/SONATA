@@ -8,7 +8,7 @@ from dolfinx import mesh as dmesh
 from dolfinx.mesh import meshtags
 from dolfinx import io
 
-def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
+def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     """function to generate the dolfin.Mesh from a SONATA-CBM definition to run
     with anbax
 
@@ -89,168 +89,126 @@ def build_dolfin_mesh(cbm_mesh, cbm_nodes, cbm_materials):
                                    per_cell_material=materials_vec,
                                    per_cell_alpha_deg=fiber_orientations,
                                    per_cell_beta_deg=plane_orientations)
+
+    result = b3_secfem.solve( mysec )
+
+    # Keep oci tracker consistent
+    result.oci = oci[result.oci]
     
-    return b3_secfem.solve( mysec )
+    return result
 
 
-def anbax_recovery(anba, n_el, force, moment, voigt_convention, T):
+def anbax_unit_recovery(anba, T=None):
     """
-    Function to recover stresses and strains from an applied loading
-    Results are generated in the global and local ('M' for material coordinate system) coordinates
+    Function to recover unit stresses and strains from an applied loading
+    Results are generated in global coordinates with dimensions: ([3 unit F + 3 unit M, num elements, 6 voigt])
 
     INPUTS:
     anba    -   dolfin construct from anbax
-    n_el    -   number of mesh elements
-    force   -   Forces in anbax coordinates, [F1, F2, F3], e.g. force = [2.2, 3.4, 1.1]
-    moment  -   Moments in anbax coordinates, [M1, M2, M3], e.g. moment = [4.2, 5.7, 6.2]
-    voigt_convention    -   "anba" with [s_xx, s_yy, s_zz, s_yz, s_xz, s_xy] or "paraview" with [s_xx, s_yy, s_zz, s_xy, s_yz, s_xz]
     T       -   Transformation matrix to convert results from ANBA to SONATA/VABS coordinates
 
     OUTPUTS:
-    *_tran issues that outputs were converted to the SONATA/VABS coordinates
-    remove '_tran' from the following output names when needed in ANBA coordinates
-
-    tmp_StressF_tran    -   global stress field
-    tmp_StressF_M_tran  -   local stress field
-    tmp_StrainF_tran    -   global strain field
-    tmp_StrainF_M_tran  -   local strain field
-
-
-
+    elem_stress_tran  -   global stress field in SONATA/VABS coordinates
+    elem_strain_tran  -   global strain field in SONATA/VABS coordinates
     """
 
-    fields = b3_secfem.recover_strains(anba)
-    tmp_StressF_vec = fields.sigma
-    tmp_StrainF_vec = fields.epsilon
+    fields  = b3_secfem.recover_unit_load_strains(anba) #unit_load_
+    stress  = fields.sigma.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
+    stressM = fields.sigma_mat.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
+    strain  = fields.epsilon.copy() # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
+
+    if T is None:
+        T = np.eye(3)
     
-    # Stress field
-    #anba.stress_field(force, moment, reference="global", voigt_convention=voigt_convention)  # get stress field in global sys
-    #tmp_StressF_vec = np.array(anba.STRESS.vector().vec())  # global stress field
-    #anba.stress_field(force, moment, reference="local", voigt_convention=voigt_convention)  # get stress field in local sys (material coordinates)
-    #tmp_StressF_M_vec = np.array(anba.STRESS.vector().vec())  # local stress field
+    # Initialize the outputs:
+    elem_stress_tran  = np.zeros(stress.shape)
+    elem_stressM_tran = np.zeros(stress.shape)
+    elem_strain_tran  = np.zeros(strain.shape)
 
-    # Strain field
-    #anba.strain_field(force, moment, reference="global", voigt_convention=voigt_convention)  # get strain field in global sys
-    #tmp_StrainF_vec = np.array(anba.STRAIN.vector().vec())  # global strain field
-    #anba.strain_field(force, moment, reference="local", voigt_convention=voigt_convention)  # get strain field in local sys (material coordinates)
-    #tmp_StrainF_M_vec = np.array(anba.STRAIN.vector().vec())  # local strain field
+    # Need matrix for for multiplication: ([3 unit F + 3 unitM, num elements, 3x3 matrix])
+    n_el = stress.shape[1]
+    elem_stress_mat  = np.zeros((6, n_el, 3, 3))
+    elem_stressM_mat = np.zeros((6, n_el, 3, 3))
+    elem_strain_mat  = np.zeros((6, n_el, 3, 3))
 
-    # cd = anba.STRESS.function_space().dofmap().cell_dofs  # index numbers of cells from dolfin mesh that was used for stress recovery (each cell has 6 dofs)
+    for k in range(n_el):
+        for ii in range(6):
+            elem_stress_mat[ii,k,:,:] = np.array([
+                [stress[ii,k,0], stress[ii,k,5], stress[ii,k,4]],
+                [stress[ii,k,5], stress[ii,k,1], stress[ii,k,3]],
+                [stress[ii,k,4], stress[ii,k,3], stress[ii,k,2]],
+            ])
+            elem_stressM_mat[ii,k,:,:] = np.array([
+                [stressM[ii,k,0], stressM[ii,k,5], stressM[ii,k,4]],
+                [stressM[ii,k,5], stressM[ii,k,1], stressM[ii,k,3]],
+                [stressM[ii,k,4], stressM[ii,k,3], stressM[ii,k,2]],
+            ])
+            elem_strain_mat[ii,k,:,:] = np.array([
+                [strain[ii,k,0], strain[ii,k,5], strain[ii,k,4]],
+                [strain[ii,k,5], strain[ii,k,1], strain[ii,k,3]],
+                [strain[ii,k,4], strain[ii,k,3], strain[ii,k,2]],
+            ])
 
-    s_11 = np.zeros(n_el)
-    s_22 = np.zeros(n_el)
-    s_33 = np.zeros(n_el)
-    s_23 = np.zeros(n_el)
-    s_13 = np.zeros(n_el)
-    s_12 = np.zeros(n_el)
-    tmp_StressF = np.zeros((n_el, 3, 3))
-    tmp_StressF_tran = np.zeros((n_el, 3, 3))
+            # Rotate the matrix to SONATA/VABS coordinates
+            istress  = T.T @ elem_stress_mat[ ii,k,:,:] @ T
+            istressM = T.T @ elem_stressM_mat[ii,k,:,:] @ T
+            istrain  = T.T @ elem_strain_mat[ ii,k,:,:] @ T
 
-    s_11_M = np.zeros(n_el)
-    s_22_M = np.zeros(n_el)
-    s_33_M = np.zeros(n_el)
-    s_23_M = np.zeros(n_el)
-    s_13_M = np.zeros(n_el)
-    s_12_M = np.zeros(n_el)
-    tmp_StressF_M = np.zeros((n_el, 3, 3))
-    tmp_StressF_M_tran = np.zeros((n_el, 3, 3))
-
-    e_11 = np.zeros(n_el)
-    e_22 = np.zeros(n_el)
-    e_33 = np.zeros(n_el)
-    e_23 = np.zeros(n_el)
-    e_13 = np.zeros(n_el)
-    e_12 = np.zeros(n_el)
-    tmp_StrainF = np.zeros((n_el, 3, 3))
-    tmp_StrainF_tran = np.zeros((n_el, 3, 3))
-
-    e_11_M = np.zeros(n_el)
-    e_22_M = np.zeros(n_el)
-    e_33_M = np.zeros(n_el)
-    e_23_M = np.zeros(n_el)
-    e_13_M = np.zeros(n_el)
-    e_12_M = np.zeros(n_el)
-    tmp_StrainF_M = np.zeros((n_el, 3, 3))
-    tmp_StrainF_M_tran = np.zeros((n_el, 3, 3))
-
-    # cell_id = np.zeros((n_el, 6))
-
-    if voigt_convention == "anba":  # [s_xx, s_yy, s_zz, s_yz, s_xz, s_xy]
-        for i in range(n_el):
-            # stresses in "global" system
-            s_11[i] = tmp_StressF_vec[i * 6]
-            s_22[i] = tmp_StressF_vec[i * 6 + 1]
-            s_33[i] = tmp_StressF_vec[i * 6 + 2]
-            s_23[i] = tmp_StressF_vec[i * 6 + 3]  # equiv to s_23
-            s_13[i] = tmp_StressF_vec[i * 6 + 4]  # equiv to s_31
-            s_12[i] = tmp_StressF_vec[i * 6 + 5]  # equiv to s_21
-            tmp_StressF[i, :, :] = np.array([[s_11[i], s_12[i], s_13[i]], [s_12[i], s_22[i], s_23[i]], [s_13[i], s_23[i], s_33[i]]])
-            tmp_StressF_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StressF[i]), T)  # transform to sonata coordinate system
-            # stresses in "local" system
-            #s_11_M[i] = tmp_StressF_M_vec[i * 6]
-            #s_22_M[i] = tmp_StressF_M_vec[i * 6 + 1]
-            #s_33_M[i] = tmp_StressF_M_vec[i * 6 + 2]
-            #s_23_M[i] = tmp_StressF_M_vec[i * 6 + 3]  # equiv to s_23_M
-            #s_13_M[i] = tmp_StressF_M_vec[i * 6 + 4]  # equiv to s_31_M
-            #s_12_M[i] = tmp_StressF_M_vec[i * 6 + 5]  # equiv to s_21_M
-            #tmp_StressF_M[i, :, :] = np.array([[s_11_M[i], s_12_M[i], s_13_M[i]], [s_12_M[i], s_22_M[i], s_23_M[i]], [s_13_M[i], s_23_M[i], s_33_M[i]]])
-            #tmp_StressF_M_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StressF_M[i]), T)  # transform to sonata coordinate system
-
-            # strains in "global" system
-            e_11[i] = tmp_StrainF_vec[i * 6]
-            e_22[i] = tmp_StrainF_vec[i * 6 + 1]
-            e_33[i] = tmp_StrainF_vec[i * 6 + 2]
-            e_23[i] = tmp_StrainF_vec[i * 6 + 3]  # equiv to e_23
-            e_13[i] = tmp_StrainF_vec[i * 6 + 4]  # equiv to e_31
-            e_12[i] = tmp_StrainF_vec[i * 6 + 5]  # equiv to e_21
-            tmp_StrainF[i, :, :] = np.array([[e_11[i], e_12[i], e_13[i]], [e_12[i], e_22[i], e_23[i]], [e_13[i], e_23[i], e_33[i]]])
-            tmp_StrainF_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StrainF[i]), T)  # transform to sonata coordinate system
-            # strains in "local" system
-            #e_11_M[i] = tmp_StrainF_M_vec[i * 6]
-            #e_22_M[i] = tmp_StrainF_M_vec[i * 6 + 1]
-            #e_33_M[i] = tmp_StrainF_M_vec[i * 6 + 2]
-            #e_23_M[i] = tmp_StrainF_M_vec[i * 6 + 3]  # equiv to e_23_M
-            #e_13_M[i] = tmp_StrainF_M_vec[i * 6 + 4]  # equiv to e_31_M
-            #e_12_M[i] = tmp_StrainF_M_vec[i * 6 + 5]  # equiv to e_21_M
-            #tmp_StrainF_M[i, :, :] = np.array([[e_11_M[i], e_12_M[i], e_13_M[i]], [e_12_M[i], e_22_M[i], e_23_M[i]], [e_13_M[i], e_23_M[i], e_33_M[i]]])
-            #tmp_StrainF_M_tran[i, :, :] = np.dot(np.dot(T.T, tmp_StrainF_M[i]), T)  # transform to sonata coordinate system
-
-            # cell_id[i, :] = cd(i)
-    elif voigt_convention == "paraview":  # different ordering compared to "anba"; "paraview" ordering: [s_xx, s_yy, s_zz, s_xy, s_yz, s_xz]
-        print("ToDo - Process to paraview output")
-
-    # Export to Paraview format (to be tested!)
-    # file_res = do.XDMFFile('output_filename.xdmf')
-    # file_res.parameters['functions_share_mesh'] = True
-    # file_res.parameters['rewrite_function_mesh'] = False
-    # file_res.parameters["flush_output"] = True
-    # file_res.write(anba.STRESS, t=2)  # t=unique_number
+            # Reduce back to voigt notation
+            elem_stress_tran[ ii,k,:] = np.r_[np.diag(istress ), istress[ 1,2], istress[ 0,2], istress[ 0,1]]
+            elem_stressM_tran[ii,k,:] = np.r_[np.diag(istressM), istressM[1,2], istressM[0,2], istressM[0,1]]
+            elem_strain_tran[ ii,k,:] = np.r_[np.diag(istrain ), istrain[ 1,2], istrain[ 0,2], istrain[ 0,1]]
+            
+    oci2orig = np.argsort(anba.oci)
+    elem_stress_tran  = elem_stress_tran[ :,oci2orig,:]
+    elem_stressM_tran = elem_stressM_tran[:,oci2orig,:]
+    elem_strain_tran  = elem_strain_tran[ :,oci2orig,:]
+    
+    return elem_stress_tran, elem_stressM_tran, elem_strain_tran
 
 
-    return tmp_StressF_tran, tmp_StressF_M_tran, tmp_StrainF_tran, tmp_StrainF_M_tran
+def anbax_recovery(anba, force, moment, T=None):
+    """
+    Function to recover total stresses and strains from an applied loading
+    Results are generated in global coordinates with dimensions: ([num elements, 6 voigt])
 
+    INPUTS:
+    anba    -   dolfin construct from anbax
+    force   -   Forces in anbax coordinates, [F1, F2, F3], e.g. force = [2.2, 3.4, 1.1]
+    moment  -   Moments in anbax coordinates, [M1, M2, M3], e.g. moment = [4.2, 5.7, 6.2]
+    T       -   Transformation matrix to convert results from ANBA to SONATA/VABS coordinates
 
+    OUTPUTS:
+    stress_sum  -   global total stress field in SONATA/VABS coordinates
+    strain_sum  -   global total strain field in SONATA/VABS coordinates
+    """
+    
+    stress, stressM, strain = anbax_unit_recovery(anba, T=T)
+    n_el = stress.shape[1]
 
-def ComputeShearCenter(stiff_matrix):  # shear center equiv. to elastic axes
-    K1 = np.array([[stiff_matrix[i, j] for j in range(3)] for i in range(3)])
-    K3 = np.array([[stiff_matrix[i, j+3] for j in range(3)] for i in range(3)])
-    Y = np.linalg.solve(K1, -K3)
-    return [-Y[2, 0], Y[1, 0]]
-    # return [-Y[1,2], Y[0,2]]
+    # Rotate forces and moments
+    if True or T is None:
+        myforce, mymoment = force, moment
+    else:
+        myforce  = T.T @ force @ T
+        mymoment = T.T @ moment @ T
+        
+    # Add up total stress and strain through super-position linear combo of unit forces and moments
+    stress_sum  = np.zeros((n_el,6))
+    stressM_sum = np.zeros((n_el,6))
+    strain_sum  = np.zeros((n_el,6))
+    for k in range(3):
+        stress_sum += myforce[ k] * stress[  k,:,:]
+        stress_sum += mymoment[k] * stress[3+k,:,:]
+        
+        stressM_sum += myforce[ k] * stressM[  k,:,:]
+        stressM_sum += mymoment[k] * stressM[3+k,:,:]
+        
+        strain_sum += myforce[ k] * strain[  k,:,:]
+        strain_sum += mymoment[k] * strain[3+k,:,:]
 
-def ComputeTensionCenter(stiff_matrix):  # tension center equiv. to neutral axes
-    K1 = np.array([[stiff_matrix[i, j] for j in range(3)] for i in range(3)])
-    K3 = np.array([[stiff_matrix[i, j+3] for j in range(3)] for i in range(3)])
-    Y = np.linalg.solve(K1, -K3)
-    return [Y[0, 2], -Y[0, 1]]
-    # return [Y[2,1], -Y[2,0]]
+    return stress_sum, stressM_sum, strain_sum
 
-def ComputeMassCenter(mass_matrix):
-    M1 = np.array([[mass_matrix[i, j] for j in range(3)] for i in range(3)])
-    M3 = np.array([[mass_matrix[i, j+3] for j in range(3)] for i in range(3)])
-    Y = np.linalg.solve(M1, -M3)
-    return [Y[0,2], Y[1,0]]
-    # return [Y[2,1], -Y[2,0]]
 
 def DecoupleStiffness(stiff_matrix):
     K = np.array([[stiff_matrix[i, j] for j in range(6)] for i in range(6)])
