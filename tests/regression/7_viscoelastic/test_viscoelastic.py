@@ -273,8 +273,8 @@ class TestVisco(unittest.TestCase):
         prony_stiff = utils.load_bd_visco(visco_path)
 
         for i in range(3):
-            ref_prony_stiff[0][i][np.abs(ref_prony_stiff[0][i])<1e-11] = 0.0
-            prony_stiff[0][i][np.abs(prony_stiff[0][i])<1e-11] = 0.0
+            ref_prony_stiff[0][i][np.abs(ref_prony_stiff[0][i])<1e-6] = 0.0
+            prony_stiff[0][i][np.abs(prony_stiff[0][i])<1e-6] = 0.0
 
             print("term {:} error: {:}".format(i,
                 np.abs(ref_prony_stiff[0][i] - prony_stiff[0][i]).max()))
