@@ -45,8 +45,10 @@ dependencies = [
   "openmdao",
   "windio",
   "matplotlib",
-  "basix",
-  "ufl",
+  "fenics-basix",
+  "fenics-ufl",
+  "fenics-dolfinx",
+  "mpi4py",
   "OCC"
 ]
 #  "dolfinx",
