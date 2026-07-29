@@ -233,7 +233,7 @@ class IsotropicMaterial(Material):
         self.alpha = None
         self.YS = None
         self.UTS = None
-        
+
         if kw.get("E") is not None:
             self.E = float(kw.get("E"))
 
@@ -432,25 +432,31 @@ class OrthotropicMaterial(Material):
         # self.S23 = float(kw.get('S23'))
 
         self.viscoelastic = {}
-        
-        # Default b3_secfem coordinate system with fiber axis on E1
-        E1, E2, E3 = self.E #[0], m.E[1], m.E[2]
-        G12, G13, G23 = self.G #[0], m.G[1], m.G[2]
-        nu12, nu13, nu23 = self.nu #[0], m.nu[1], m.nu[2]
 
-        # If trying to trick b3_secfem to give results like Anba that has fiber axis on E3:
-        #E1, E2, E3 = self.E[1], self.E[2], self.E[0]
-        #G12, G13, G23 = self.G[2], self.G[0], self.G[1]
-        #nu12, nu31, nu32 = self.nu[2], self.nu[0], self.nu[1]
-        #nu13 = nu31*E1/E3
-        #nu23 = nu32*E2/E3
-        
-        self.b3mat = b3_secfem.OrthotropicMaterial(E1=E1, # Young's modulus, fibre [Pa] (Ezz along beam axis)
-                                            E2=E2, # Young's modulus, transverse-2 [Pa]
-                                            E3=E3, # Young's modulus, transverse-3 [Pa]
-                                            G12=G12, G13=G13, G23=G23,
-                                            nu12=nu12, nu13=nu13, nu23=nu23,
-                                            rho=self.rho, name=self.name)
+        # Map YAML/ANBA4 axes to b3_secfem axes.
+        #
+        # YAML/ANBA4 convention: 1=fiber, 2=perimeter, 3=through-thickness.
+        # b3_secfem convention: axis1=fiber. At the default rotation
+        # (beta=0, alpha=0), R = R_y(-90) maps:
+        #   b3 axis1 -> global z (beam/fiber)    [= YAML axis 1]
+        #   b3 axis2 -> global y (cross-section) [= YAML axis 3, through-thickness]
+        #   b3 axis3 -> global -x                [= YAML axis 2, perimeter]
+        # Therefore axes 2 and 3 must be swapped when converting from YAML to b3_secfem.
+        E1, E2_yaml, E3_yaml = self.E
+        G12_yaml, G13_yaml, G23_yaml = self.G
+        nu12_yaml, nu13_yaml, nu23_yaml = self.nu
+
+        self.b3mat = b3_secfem.OrthotropicMaterial(
+            E1=E1,           # b3 axis1 (fiber)       <- YAML E_1
+            E2=E3_yaml,      # b3 axis2 (thickness)   <- YAML E_3
+            E3=E2_yaml,      # b3 axis3 (perimeter)   <- YAML E_2
+            G12=G13_yaml,    # b3 G12 (fiber-thickness)  <- YAML G_13
+            G13=G12_yaml,    # b3 G13 (fiber-perimeter)  <- YAML G_12
+            G23=G23_yaml,    # b3 G23 (thickness-perimeter) <- YAML G_23
+            nu12=nu13_yaml,  # b3 nu12 (fiber->thickness) <- YAML nu_13
+            nu13=nu12_yaml,  # b3 nu13 (fiber->perimeter) <- YAML nu_12
+            nu23=nu23_yaml,  # b3 nu23 unchanged
+            rho=self.rho, name=self.name)
 
     '''
     # Using the abstract version that calls the b3_secfem materials class instead
