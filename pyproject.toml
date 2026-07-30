@@ -45,13 +45,7 @@ dependencies = [
   "openmdao",
   "windio",
   "matplotlib",
-  "fenics-basix",
-  "fenics-ufl",
-  "fenics-dolfinx",
-  "mpi4py",
-  "OCC"
 ]
-#  "dolfinx",
 
 [project.urls]  # Optional
 #"Homepage" = "https://gitlab.lrz.de/rfeil/SONATA"

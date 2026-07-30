@@ -15,6 +15,11 @@ dependencies:
   - pre-commit
   - shapely
   - windIO
+  - fenics-basix
+  - fenics-ufl
+  - fenics-dolfinx
+  - mpi4py
+  - OCC
   - pip:
     - triangle
 
