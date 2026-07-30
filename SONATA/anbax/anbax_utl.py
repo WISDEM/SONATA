@@ -47,7 +47,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     coords = np.zeros((len(cbm_nodes), 2))
     for n in cbm_nodes:
         coords[n.id-1,:] = n.coordinates
-        
+
     n_cells = len(cbm_mesh)
     tris = np.zeros((n_cells, 3), dtype=np.int32)
     fiber_orientations = np.zeros(n_cells)
@@ -69,7 +69,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     materials_vec = [materials_vec[m] for m in oci]
     fiber_orientations = fiber_orientations[oci]
     plane_orientations = plane_orientations[oci]
-    
+
     # This meshtag doesn't do anything if not using the "region_mat" approach, but code complains if no tags are given
     indices = np.arange(n_cells, dtype=np.int32)
     values = np.array([c.id-1 for c in cbm_mesh], dtype=np.int32)
@@ -94,7 +94,12 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
 
     # Keep oci tracker consistent
     result.oci = oci[result.oci]
-    
+    # Store per-cell arrays (all already in dolfinx order) so recovery can
+    # build per-cell material frames and detect isotropic vs orthotropic.
+    result.per_cell_beta_deg  = plane_orientations
+    result.per_cell_alpha_deg = fiber_orientations
+    result.per_cell_material  = materials_vec
+
     return result
 
 
@@ -109,62 +114,90 @@ def anbax_unit_recovery(anba, T=None):
 
     OUTPUTS:
     elem_stress_tran  -   global stress field in SONATA/VABS coordinates
+    elem_stressM_mat  -   material-frame stress field before SONATA/VABS rotation
     elem_strain_tran  -   global strain field in SONATA/VABS coordinates
+    elem_strainM_mat  -   material-frame strain field before SONATA/VABS rotation
     """
 
     fields  = b3_secfem.recover_unit_load_strains(anba) #unit_load_
     stress  = fields.sigma.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
-    stressM = fields.sigma_mat.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
     strain  = fields.epsilon.copy() # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
 
     if T is None:
         T = np.eye(3)
-    
+
+    n_el = stress.shape[1]
+
+    # Per-cell plane-orientation angles (theta_1) in dolfinx order.
+    beta_arr  = anba.per_cell_beta_deg  if anba.per_cell_beta_deg  is not None else np.zeros(n_el)
+    mat_list  = anba.per_cell_material  if anba.per_cell_material  is not None else [None] * n_el
+
+    def _Q_sonata_material(t_deg):
+        """Rotation Q whose columns are the SONATA material axes expressed in
+        b3_secfem global (x, y, z):
+          col 0 -> fiber axis    = z  (beam direction)
+          col 1 -> perimeter     = (cos t, sin t, 0)
+          col 2 -> through-thick = (-sin t, cos t, 0)
+        so that  sigma_SONATA_material = Q.T @ sigma_b3global @ Q
+        gives stress in (fiber, perimeter, through-thickness) convention.
+        """
+        t = np.deg2rad(t_deg)
+        c, s = np.cos(t), np.sin(t)
+        return np.array([[0.,  c, -s],
+                         [0.,  s,  c],
+                         [1.,  0.,  0.]])
+
     # Initialize the outputs:
     elem_stress_tran  = np.zeros(stress.shape)
-    elem_stressM_tran = np.zeros(stress.shape)
     elem_strain_tran  = np.zeros(strain.shape)
-
-    # Need matrix for for multiplication: ([3 unit F + 3 unitM, num elements, 3x3 matrix])
-    n_el = stress.shape[1]
-    elem_stress_mat  = np.zeros((6, n_el, 3, 3))
-    elem_stressM_mat = np.zeros((6, n_el, 3, 3))
-    elem_strain_mat  = np.zeros((6, n_el, 3, 3))
+    elem_stressM_mat  = np.zeros(stress.shape)
+    elem_strainM_mat  = np.zeros(strain.shape)
 
     for k in range(n_el):
+        mat = mat_list[k]
+        is_isotropic = (mat is None or isinstance(mat, b3_secfem.IsotropicMaterial))
+
+        if not is_isotropic:
+            Q = _Q_sonata_material(float(beta_arr[k]))
+
         for ii in range(6):
-            elem_stress_mat[ii,k,:,:] = np.array([
-                [stress[ii,k,0], stress[ii,k,5], stress[ii,k,4]],
-                [stress[ii,k,5], stress[ii,k,1], stress[ii,k,3]],
-                [stress[ii,k,4], stress[ii,k,3], stress[ii,k,2]],
-            ])
-            elem_stressM_mat[ii,k,:,:] = np.array([
-                [stressM[ii,k,0], stressM[ii,k,5], stressM[ii,k,4]],
-                [stressM[ii,k,5], stressM[ii,k,1], stressM[ii,k,3]],
-                [stressM[ii,k,4], stressM[ii,k,3], stressM[ii,k,2]],
-            ])
-            elem_strain_mat[ii,k,:,:] = np.array([
-                [strain[ii,k,0], strain[ii,k,5], strain[ii,k,4]],
-                [strain[ii,k,5], strain[ii,k,1], strain[ii,k,3]],
-                [strain[ii,k,4], strain[ii,k,3], strain[ii,k,2]],
-            ])
+            s = stress[ii, k, :]
+            e = strain[ii, k, :]
 
-            # Rotate the matrix to SONATA/VABS coordinates
-            istress  = T.T @ elem_stress_mat[ ii,k,:,:] @ T
-            istressM = T.T @ elem_stressM_mat[ii,k,:,:] @ T
-            istrain  = T.T @ elem_strain_mat[ ii,k,:,:] @ T
+            # Unpack Voigt -> 3x3 symmetric (b3_secfem Voigt: s11,s22,s33,s23,s13,s12)
+            sg3 = np.array([[s[0], s[5], s[4]],
+                            [s[5], s[1], s[3]],
+                            [s[4], s[3], s[2]]])
+            eg3 = np.array([[e[0], e[5], e[4]],
+                            [e[5], e[1], e[3]],
+                            [e[4], e[3], e[2]]])
 
-            # Reduce back to voigt notation
-            elem_stress_tran[ ii,k,:] = np.r_[np.diag(istress ), istress[ 1,2], istress[ 0,2], istress[ 0,1]]
-            elem_stressM_tran[ii,k,:] = np.r_[np.diag(istressM), istressM[1,2], istressM[0,2], istressM[0,1]]
-            elem_strain_tran[ ii,k,:] = np.r_[np.diag(istrain ), istrain[ 1,2], istrain[ 0,2], istrain[ 0,1]]
-            
+            # Global stress in SONATA/VABS axes (T permutes b3_secfem x,y,z -> SONATA 2,3,1)
+            istress = T.T @ sg3 @ T
+            istrain = T.T @ eg3 @ T
+            elem_stress_tran[ii, k, :] = np.r_[np.diag(istress), istress[1,2], istress[0,2], istress[0,1]]
+            elem_strain_tran[ii, k, :] = np.r_[np.diag(istrain), istrain[1,2], istrain[0,2], istrain[0,1]]
+
+            if is_isotropic:
+                # Isotropic: no preferred material direction -> material frame = global frame
+                sm3 = istress
+                em3 = istrain
+            else:
+                # Orthotropic: rotate to SONATA material frame (fiber, perimeter, through-thickness)
+                # Q.T @ sg3_b3global @ Q gives stress in SONATA material convention directly
+                sm3 = Q.T @ sg3 @ Q
+                em3 = Q.T @ eg3 @ Q
+
+            elem_stressM_mat[ii, k, :] = np.r_[np.diag(sm3), sm3[1,2], sm3[0,2], sm3[0,1]]
+            elem_strainM_mat[ii, k, :] = np.r_[np.diag(em3), em3[1,2], em3[0,2], em3[0,1]]
+
     oci2orig = np.argsort(anba.oci)
-    elem_stress_tran  = elem_stress_tran[ :,oci2orig,:]
-    elem_stressM_tran = elem_stressM_tran[:,oci2orig,:]
-    elem_strain_tran  = elem_strain_tran[ :,oci2orig,:]
-    
-    return elem_stress_tran, elem_stressM_tran, elem_strain_tran
+    elem_stress_tran = elem_stress_tran[:, oci2orig, :]
+    elem_stressM_mat = elem_stressM_mat[:, oci2orig, :]
+    elem_strain_tran = elem_strain_tran[:, oci2orig, :]
+    elem_strainM_mat = elem_strainM_mat[:, oci2orig, :]
+
+    return elem_stress_tran, elem_stressM_mat, elem_strain_tran, elem_strainM_mat
 
 
 def anbax_recovery(anba, force, moment, T=None):
@@ -182,8 +215,8 @@ def anbax_recovery(anba, force, moment, T=None):
     stress_sum  -   global total stress field in SONATA/VABS coordinates
     strain_sum  -   global total strain field in SONATA/VABS coordinates
     """
-    
-    stress, stressM, strain = anbax_unit_recovery(anba, T=T)
+
+    stress, stressM, strain, strainM = anbax_unit_recovery(anba, T=T)
     n_el = stress.shape[1]
 
     # Rotate forces and moments
@@ -192,22 +225,26 @@ def anbax_recovery(anba, force, moment, T=None):
     else:
         myforce  = T.T @ force @ T
         mymoment = T.T @ moment @ T
-        
+
     # Add up total stress and strain through super-position linear combo of unit forces and moments
     stress_sum  = np.zeros((n_el,6))
     stressM_sum = np.zeros((n_el,6))
     strain_sum  = np.zeros((n_el,6))
+    strainM_sum = np.zeros((n_el,6))
     for k in range(3):
         stress_sum += myforce[ k] * stress[  k,:,:]
         stress_sum += mymoment[k] * stress[3+k,:,:]
-        
+
         stressM_sum += myforce[ k] * stressM[  k,:,:]
         stressM_sum += mymoment[k] * stressM[3+k,:,:]
-        
+
         strain_sum += myforce[ k] * strain[  k,:,:]
         strain_sum += mymoment[k] * strain[3+k,:,:]
 
-    return stress_sum, stressM_sum, strain_sum
+        strainM_sum += myforce[ k] * strainM[  k,:,:]
+        strainM_sum += mymoment[k] * strainM[3+k,:,:]
+
+    return stress_sum, stressM_sum, strain_sum, strainM_sum
 
 
 def DecoupleStiffness(stiff_matrix):

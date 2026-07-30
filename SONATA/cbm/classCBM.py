@@ -619,7 +619,7 @@ class CBM(object):
         # --- Stress & Strain recovery --- #
         if  self.config.anbax_cfg.recover_flag:
             print("STATUS:\t Running ANBAX Stress & Strain Recovery:")
-            elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, self.config.anbax_cfg.F.tolist(), self.config.anbax_cfg.M.tolist(), T)
+            elem_stress, elem_stressM, elem_strain, elem_strainM = anbax_recovery(anba, self.config.anbax_cfg.F.tolist(), self.config.anbax_cfg.M.tolist(), T)
 
             # ASSIGN stresses and strains to mesh elements in np.triu_indices_from order
             for i,c in enumerate(self.mesh):
@@ -627,7 +627,7 @@ class CBM(object):
                 c.stress =  Stress([elem_stress[ i,0], elem_stress[ i,5], elem_stress[ i,4], elem_stress[ i,1], elem_stress[ i,3], elem_stress[i,2]])
                 c.strain =  Strain([elem_strain[ i,0], elem_strain[ i,5], elem_strain[ i,4], elem_strain[ i,1], elem_strain[ i,3], elem_strain[i,2]])
                 c.stressM = Stress([elem_stressM[i,0], elem_stressM[i,5], elem_stressM[i,4], elem_stressM[i,1], elem_stressM[i,3], elem_stressM[i,2]])
-                c.strainM = c.strain
+                c.strainM = Strain([elem_strainM[i,0], elem_strainM[i,5], elem_strainM[i,4], elem_strainM[i,1], elem_strainM[i,3], elem_strainM[i,2]])
 
         return
 
@@ -674,10 +674,10 @@ class CBM(object):
         #print(self.BeamProperties.MM)
         #print(self.BeamProperties.Xt)
         #print(self.BeamProperties.Xs)
-        
+
         # Recover the mapping from sectional Forces and Moments to Strain
         # in a non-invasive way from ANBA
-        elem_stress, _, elem_strain = anbax_unit_recovery(anba, T)
+        elem_stress, _, elem_strain, elem_strainM = anbax_unit_recovery(anba, T)
 
         # Reordering is necessary from the conventional stress/strain order
         # to match the constitutive tensor built from ANBAX.
@@ -687,7 +687,7 @@ class CBM(object):
 
         # ASSIGN stresses and strains to mesh elements:
         for ic,c in enumerate(self.mesh):
-            istrain = elem_strain[:,ic,:].T # Swap rows and columns so voigt matrix is first index
+            istrain = elem_strainM[:,ic,:].T # Swap rows and columns so voigt matrix is first index
             c.fm_to_strain = istrain[reorder_stress_strain,:]
             #print(ic, c.fm_to_strain)
 
@@ -953,7 +953,7 @@ class CBM(object):
             # This ends up being potentially excessively slow since
             # it does a new calculation for each stress and strain field (4),
             # but only need the material coordinate strain field.
-            elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, F, M, T)
+            elem_stress, elem_stressM, elem_strain, elem_strainM = anbax_recovery(anba, F, M, T)
 
             # 3. Store Strain results in each case / element
             fc_to_strain_m[:, i, :] = elem_strain.T
