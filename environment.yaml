@@ -21,7 +21,6 @@ dependencies:
   - mpi4py
   - pip:
     - OCC
-    - triangle
 
 variables:
   PIP_EXTRA_INDEX_URL: https://pypi.org/simple
