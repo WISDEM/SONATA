@@ -19,8 +19,8 @@ dependencies:
   - fenics-ufl
   - fenics-dolfinx
   - mpi4py
-  - OCC
   - pip:
+    - OCC
     - triangle
 
 variables:
