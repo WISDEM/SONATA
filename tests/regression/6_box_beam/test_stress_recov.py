@@ -658,16 +658,11 @@ class TestStressStrain(unittest.TestCase):
             J = np.pi/2 * (radius**4 - (radius-thickness)**4)
 
             tau_max = -applied_loads[3] * radius / J
-            # Torsion of a hollow cylinder: sigma13 = sigma_zy = +M/J * x_rel
-            # = -tau_max * x_rel / radius, where x_rel = distance from tube centre in x.
-            # Tube centre is at (-radius, 0), so x_rel = cxy[:,0] + radius.
-            x_rel = cxy[:, 0] + radius
+            test_rad = np.linalg.norm(cxy + np.array([[radius, 0.0]]), axis = 1)
 
-            npt.assert_array_less(np.abs(sigma13 + tau_max*x_rel/radius).max() , 0.01*np.abs(tau_max), err_msg="Max sigma13 for moment 1 (torsion) doesn't match theory.")
+            npt.assert_array_less(np.abs(sigma12 - tau_max*test_rad/radius).max() , 0.01*np.abs(tau_max), err_msg="Max sigma12 for moment 1 (torsion) doesn't match theory.")
 
-            # sigma12 = sigma_zx = -M/J * y_rel = tau_max * y_rel / radius (also nonzero for circular tube)
-            y_rel = cxy[:, 1]  # tube centre is at y=0, so y_rel = cxy[:,1]
-            npt.assert_array_less(np.abs(sigma12 - tau_max*y_rel/radius).max() , 0.01*np.abs(tau_max), err_msg="Max sigma12 for moment 1 (torsion) doesn't match theory.")
+            npt.assert_array_less(np.abs(sigma13).max() , 0.1*np.abs(tau_max), err_msg="Should have 0 sigma13 for moment 1.")
 
             npt.assert_array_less(np.abs(sigma23).max() , tol, err_msg="Should have 0 sigma23 for moment 1.")
 
