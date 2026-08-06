@@ -4,14 +4,12 @@ channels:
 
 dependencies:
   - fenics=2019.1.0
-  - git
   - intervaltree=3.1.0
-  - matplotlib
   - mshr=2019.1.0
-  - pip
-  - pytest
+  - pip=25.2
   - pythonocc-core=7.9.0
   - pyyaml=6.0.2
+  - python=3.10.18
   - pip:
     - shapely=2.1.1
     - triangle=20230923
