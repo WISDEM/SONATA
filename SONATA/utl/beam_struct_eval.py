@@ -24,15 +24,15 @@ from SONATA.utl_openfast.utl_sonata2beamdyn import write_beamdyn_axis, write_bea
 def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, job_str, mu):
 
     """
-    Analyse, transform, evaluate and plot structural results from VABS and/or ANBAX
+    Analyse, transform, evaluate and plot structural results from VABS and/or b3_secfem
 
     Functions:
     beam_struct_eval                    - parent function (retrieve & transform data, structure of data evaluation)
     plot_beam_props_6by6                - function to plot the 6x6 stiffness and mass matrices
     plot_beam_mass_distribution         - function to plot the beam mass per unit length distribution
-    plot_vabs_anbax                     - function to plot the 6x6 stiffness and mass matrices from both VABS and ANBAX for code-to-code verification
+    plot_vabs_b3_secfem                     - function to plot the 6x6 stiffness and mass matrices from both VABS and b3_secfem for code-to-code verification
     vabs_export_beam_struct_properties  - csv export of structural beam properties
-    anbax_export_beam_struct_properties - csv export of structural beam properties
+    b3_secfem_export_beam_struct_properties - csv export of structural beam properties
 
     Inputs:
     flags_dict          - dictionary containing relevant flags
@@ -71,14 +71,14 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
             flags_dict[key] = False
 
 
-    # --- ANBAX --- #
+    # --- b3_secfem --- #
     # --------------------------------------- #
-    # clear var before initializing anbax
+    # clear var before initializing b3_secfem
     job.beam_properties = None
 
 
     # --------------------------------------- #
-    # --- ANBAX --- #
+    # --- b3_secfem --- #
     if flags_dict['flag_recovery'] and not flags_dict['viscoelastic']:
 
         if np.asarray(loads_dict['Forces']).shape == (3,):
@@ -99,7 +99,7 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
                        float(loads_dict["Moments"][2]),
                        float(loads_dict["Moments"][0])]
 
-            loads = {# sonata coord system input converted to anbax coordinates
+            loads = {# sonata coord system input converted to b3_secfem coordinates
                 "F":    np.array([[0] + Forces,
                                   [1] + Forces]),
                 "M":    np.array([[0] + Moments,
@@ -114,9 +114,9 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
                 "M" : loads_dict["Moments"][:, [0, 2, 3, 1]]
                     }
 
-        job.blade_run_anbax(loads)  # run anbax
+        job.blade_run_b3_secfem(loads)  # run b3_secfem
     elif not flags_dict['viscoelastic']:
-        job.blade_run_anbax()  # run anbax
+        job.blade_run_b3_secfem()  # run b3_secfem
     else:
         # flags_dict['viscoelastic'] == True
 
@@ -127,30 +127,30 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
         job.blade_run_viscoelastic()
 
     # init used matrices and arrays
-    anbax_beam_stiff_init = np.zeros([len(cs_pos), 6, 6])
-    anbax_beam_inertia_init = np.zeros([len(cs_pos), 6, 6])
-    anbax_beam_stiff = np.zeros([len(cs_pos), 6, 6])
-    anbax_beam_inertia = np.zeros([len(cs_pos), 6, 6])
-    anbax_beam_section_mass = np.zeros([len(cs_pos), 1])
+    b3_secfem_beam_stiff_init = np.zeros([len(cs_pos), 6, 6])
+    b3_secfem_beam_inertia_init = np.zeros([len(cs_pos), 6, 6])
+    b3_secfem_beam_stiff = np.zeros([len(cs_pos), 6, 6])
+    b3_secfem_beam_inertia = np.zeros([len(cs_pos), 6, 6])
+    b3_secfem_beam_section_mass = np.zeros([len(cs_pos), 1])
 
     if flags_dict['viscoelastic']:
-        anbax_beam_viscoelastic \
+        b3_secfem_beam_viscoelastic \
             = np.zeros((len(cs_pos), len(job.beam_properties[0][1].tau), 6, 6))
 
     # --------------------------------------- #
-    # retrieve & allocate ANBAX results
+    # retrieve & allocate b3_secfem results
     for i in range(len(job.beam_properties)):
-        anbax_beam_section_mass[i] = job.beam_properties[i, 1].m00  # receive mass per unit span
+        b3_secfem_beam_section_mass[i] = job.beam_properties[i, 1].m00  # receive mass per unit span
         for j in range(6):
-            anbax_beam_stiff_init[i, j, :] = np.array(job.beam_properties[i, 1].TS[j, :])  # receive 6x6 timoshenko stiffness matrix
-            anbax_beam_inertia_init[i, j, :] = np.array(job.beam_properties[i, 1].MM[j, :])  # receive 6x6 mass matrix
+            b3_secfem_beam_stiff_init[i, j, :] = np.array(job.beam_properties[i, 1].TS[j, :])  # receive 6x6 timoshenko stiffness matrix
+            b3_secfem_beam_inertia_init[i, j, :] = np.array(job.beam_properties[i, 1].MM[j, :])  # receive 6x6 mass matrix
 
         if flags_dict['viscoelastic']:
             for k in range(len(job.beam_properties[0][1].tau)):
-                anbax_beam_viscoelastic[i, k, :, :] = job.beam_properties[i, 1].TSv[k]
+                b3_secfem_beam_viscoelastic[i, k, :, :] = job.beam_properties[i, 1].TSv[k]
 
     # --------------------------------------- #
-    # rotate anbax results from SONATA/VABS def to BeamDyn def coordinate
+    # rotate b3_secfem results from SONATA/VABS def to BeamDyn def coordinate
     # system (for flag_DeamDyn_def_transform = True)
     # OpenTurbine transform is from BeamDyn, so rotate in that case as well.
     if flags_dict['flag_DeamDyn_def_transform'] \
@@ -161,22 +161,22 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
         B = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])  # transformation matrix
         T = np.dot(np.identity(3), np.linalg.inv(B))
         for n_sec in range(len(cs_pos)):
-            anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff_init[n_sec, :, :], T)
-            anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia_init[n_sec, :, :], T)
+            b3_secfem_beam_stiff[n_sec, :, :] = trsf_sixbysix(b3_secfem_beam_stiff_init[n_sec, :, :], T)
+            b3_secfem_beam_inertia[n_sec, :, :] = trsf_sixbysix(b3_secfem_beam_inertia_init[n_sec, :, :], T)
 
             if flags_dict['viscoelastic']:
                 for k in range(len(job.beam_properties[0][1].tau)):
-                    anbax_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
-                                        anbax_beam_viscoelastic[n_sec, k, :, :], T)
+                    b3_secfem_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
+                                        b3_secfem_beam_viscoelastic[n_sec, k, :, :], T)
 
 
         # str_ext = '_BeamDyn_def'
         coordsys = 'BeamDyn'
 
-        print('STATUS:\t Structural characteristics of ANBAX converted from SONATA/VABS to BeamDyn coordinate system definition!')
+        print('STATUS:\t Structural characteristics of b3_secfem converted from SONATA/VABS to BeamDyn coordinate system definition!')
     else:
-        anbax_beam_stiff = anbax_beam_stiff_init
-        anbax_beam_inertia = anbax_beam_inertia_init
+        b3_secfem_beam_stiff = b3_secfem_beam_stiff_init
+        b3_secfem_beam_inertia = b3_secfem_beam_inertia_init
         # str_ext = ''
         coordsys = 'VABS/SONATA'
 
@@ -184,26 +184,26 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
     # --------------------------------------- #
     # Export beam structural properties to csv file
     if flags_dict['flag_csv_export']:
-        print('STATUS:\t Export csv files with structural blade characeristics from ANBAX to: ' + folder_str + 'csv_export/')
-        anbax_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, solver='anbax', beam_stiff=anbax_beam_stiff,
-                                        beam_inertia=anbax_beam_inertia, beam_mass_per_length=anbax_beam_section_mass)
+        print('STATUS:\t Export csv files with structural blade characeristics from b3_secfem to: ' + folder_str + 'csv_export/')
+        b3_secfem_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, solver='b3_secfem', beam_stiff=b3_secfem_beam_stiff,
+                                        beam_inertia=b3_secfem_beam_inertia, beam_mass_per_length=b3_secfem_beam_section_mass)
 
 
 
     # --------------------------------------- #
     # Export beam structural properties to csv file
     # if flags_dict['flag_csv_export']:
-    #     print('STATUS:\t Export csv files with structural blade characeristics from ANBAX to: ' + folder_str + 'csv_export/')
-    #     export_beam_struct_properties(folder_str, job_str, cs_pos, solver='anbax', beam_stiff=anbax_beam_stiff, beam_inertia=anbax_beam_inertia, beam_mass_per_length=anbax_beam_section_mass)
+    #     print('STATUS:\t Export csv files with structural blade characeristics from b3_secfem to: ' + folder_str + 'csv_export/')
+    #     export_beam_struct_properties(folder_str, job_str, cs_pos, solver='b3_secfem', beam_stiff=b3_secfem_beam_stiff, beam_inertia=b3_secfem_beam_inertia, beam_mass_per_length=b3_secfem_beam_section_mass)
 
-    # ToDo: also export BeamDyn files for results from anbax as soon as the verification is completed
+    # ToDo: also export BeamDyn files for results from b3_secfem as soon as the verification is completed
     # --------------------------------------- #
     # write BeamDyn input files
-    np.savetxt('anbax_BAR00.txt', np.array([cs_pos, anbax_beam_stiff[:, 3, 3],
-                                            anbax_beam_stiff[:, 4, 4],
-                                            anbax_beam_stiff[:, 5, 5],
-                                            anbax_beam_stiff[:, 2, 2],
-                                            anbax_beam_inertia[:, 0, 0]]).T)
+    np.savetxt('b3_secfem_BAR00.txt', np.array([cs_pos, b3_secfem_beam_stiff[:, 3, 3],
+                                            b3_secfem_beam_stiff[:, 4, 4],
+                                            b3_secfem_beam_stiff[:, 5, 5],
+                                            b3_secfem_beam_stiff[:, 2, 2],
+                                            b3_secfem_beam_inertia[:, 0, 0]]).T)
 
     if flags_dict['flag_DeamDyn_def_transform'] \
         and flags_dict['flag_output_zero_twist']:
@@ -231,13 +231,13 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
                                 [-np.sin(alpha), np.cos(alpha), 0],
                                 [0, 0, 1]])
 
-            anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff[n_sec, :, :], rot_mat)
-            anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia[n_sec, :, :], rot_mat)
+            b3_secfem_beam_stiff[n_sec, :, :] = trsf_sixbysix(b3_secfem_beam_stiff[n_sec, :, :], rot_mat)
+            b3_secfem_beam_inertia[n_sec, :, :] = trsf_sixbysix(b3_secfem_beam_inertia[n_sec, :, :], rot_mat)
 
             if flags_dict['viscoelastic']:
                 for k in range(len(job.beam_properties[0][1].tau)):
-                    anbax_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
-                        anbax_beam_viscoelastic[n_sec, k, :, :], rot_mat)
+                    b3_secfem_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
+                        b3_secfem_beam_viscoelastic[n_sec, k, :, :], rot_mat)
 
         job.true_twist = np.copy(job.twist[:, 1])
 
@@ -249,7 +249,7 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
         print('STATUS:\t Write BeamDyn input files')
         # refine = int(30/len(cs_pos))  # initiate node refinement parameter
         write_beamdyn_axis(folder_str, flags_dict, job_name, job.blade_ref_axis, job.twist)
-        write_beamdyn_prop(folder_str, flags_dict, job_name, cs_pos, anbax_beam_stiff, anbax_beam_inertia, mu)
+        write_beamdyn_prop(folder_str, flags_dict, job_name, cs_pos, b3_secfem_beam_stiff, b3_secfem_beam_inertia, mu)
 
         if flags_dict['viscoelastic']:
 
@@ -257,7 +257,7 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
             write_beamdyn_viscoelastic(folder_str, flags_dict,
                                        job_name, cs_pos,
                                        job.beam_properties[0][1].tau,
-                                       anbax_beam_viscoelastic)
+                                       b3_secfem_beam_viscoelastic)
 
     if flags_dict['flag_OpenTurbine_transform']:
 
@@ -266,13 +266,13 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
         T = np.array([[0, 0, 1], [0, 1, 0], [-1, 0, 0]])
 
         for n_sec in range(len(cs_pos)):
-            anbax_beam_stiff[n_sec, :, :] = trsf_sixbysix(anbax_beam_stiff[n_sec, :, :], T)
-            anbax_beam_inertia[n_sec, :, :] = trsf_sixbysix(anbax_beam_inertia[n_sec, :, :], T)
+            b3_secfem_beam_stiff[n_sec, :, :] = trsf_sixbysix(b3_secfem_beam_stiff[n_sec, :, :], T)
+            b3_secfem_beam_inertia[n_sec, :, :] = trsf_sixbysix(b3_secfem_beam_inertia[n_sec, :, :], T)
 
             if flags_dict['viscoelastic']:
                 for k in range(len(job.beam_properties[0][1].tau)):
-                    anbax_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
-                                        anbax_beam_viscoelastic[n_sec, k, :, :], T)
+                    b3_secfem_beam_viscoelastic[n_sec, k, :, :] = trsf_sixbysix(
+                                        b3_secfem_beam_viscoelastic[n_sec, k, :, :], T)
 
 
         # str_ext = '_OpenTurbine_def'
@@ -286,7 +286,7 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
         print('STATUS:\t Write OpenTurbine input files')
 
         write_beamdyn_prop(folder_str, flags_dict, job_name,
-                           cs_pos, anbax_beam_stiff, anbax_beam_inertia, mu,
+                           cs_pos, b3_secfem_beam_stiff, b3_secfem_beam_inertia, mu,
                            format_name='OpenTurbine')
 
         if flags_dict['viscoelastic']:
@@ -295,7 +295,7 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
             write_beamdyn_viscoelastic(folder_str, flags_dict,
                                        job_name, cs_pos,
                                        job.beam_properties[0][1].tau,
-                                       anbax_beam_viscoelastic,
+                                       b3_secfem_beam_viscoelastic,
                                        format_name='OpenTurbine')
 
 # ============================================= #
@@ -361,7 +361,7 @@ def plot_beam_mass_distribution(cs_pos, vabs_beam_mass_distribution, save_path):
 
 
 # ============================================= #
-def plot_vabs_anbax(cs_pos, vabs_data, anbax_data, fig_title, save_path):
+def plot_vabs_b3_secfem(cs_pos, vabs_data, b3_secfem_data, fig_title, save_path):
     # plots 6x6 matrix
     k = 1
     fig = plt.figure(tight_layout=True, figsize=(14, 10), dpi=80, facecolor='w', edgecolor='k')
@@ -371,8 +371,8 @@ def plot_vabs_anbax(cs_pos, vabs_data, anbax_data, fig_title, save_path):
             if j >= i:
                 ax = fig.add_subplot(len(vabs_data[0, :, 0]), len(vabs_data[0, 0, :]), k)
                 ax.plot(cs_pos, vabs_data[:, i, j], '--k')
-                ax.plot(cs_pos, anbax_data[:, i, j], ':r')
-                plt.ylim(1.1 * min(-1, min(vabs_data[:, i, j]), min(anbax_data[:, i, j])), 1.1 * max(1, max(vabs_data[:, i, j]), max(anbax_data[:, i, j])))
+                ax.plot(cs_pos, b3_secfem_data[:, i, j], ':r')
+                plt.ylim(1.1 * min(-1, min(vabs_data[:, i, j]), min(b3_secfem_data[:, i, j])), 1.1 * max(1, max(vabs_data[:, i, j]), max(b3_secfem_data[:, i, j])))
                 ax.set_xlabel('r/R')
                 if fig_title == 'Mass matrix':
                     ax.set_title('$m_{%i %i}$' % ((i + 1), (j + 1)))
@@ -396,7 +396,7 @@ def vabs_export_beam_struct_properties(folder_str, job_str, radial_stations, coo
         export_name_stiff = 'vabs_beam_properties_stiff_matrices.csv'
         export_name_mass = 'vabs_beam_properties_mass_matrices.csv'
     else:
-        print('Define correct solver name (vabs or anbax) when calling export_beam_struct_properties')
+        print('Define correct solver name (vabs or b3_secfem) when calling export_beam_struct_properties')
 
     # -------------------------------------------------- #
     # Export mass per unit length for the defined radial stations
@@ -457,14 +457,14 @@ def vabs_export_beam_struct_properties(folder_str, job_str, radial_stations, coo
 
 
 
-def anbax_export_beam_struct_properties(folder_str, job_str, radial_stations, coordsys, solver, beam_stiff, beam_inertia, beam_mass_per_length):
+def b3_secfem_export_beam_struct_properties(folder_str, job_str, radial_stations, coordsys, solver, beam_stiff, beam_inertia, beam_mass_per_length):
 
-    if solver=='anbax':
-        export_name_general = 'anbax_beam_properties_general.csv'
-        export_name_stiff = 'anbax_beam_properties_stiff_matrices.csv'
-        export_name_mass = 'anbax_beam_properties_mass_matrices.csv'
+    if solver=='b3_secfem':
+        export_name_general = 'b3_secfem_beam_properties_general.csv'
+        export_name_stiff = 'b3_secfem_beam_properties_stiff_matrices.csv'
+        export_name_mass = 'b3_secfem_beam_properties_mass_matrices.csv'
     else:
-        print('Define correct solver name (vabs or anbax) when calling export_beam_struct_properties')
+        print('Define correct solver name (vabs or b3_secfem) when calling export_beam_struct_properties')
 
     # -------------------------------------------------- #
     # Export mass per unit length for the defined radial stations
@@ -476,7 +476,7 @@ def anbax_export_beam_struct_properties(folder_str, job_str, radial_stations, co
             beam_prop_writer.writerow(['Coordinate system:', 'Beamdyn coordinates'])
         elif coordsys == 'VABS/SONATA':
             beam_prop_writer.writerow(['Coordinate system:', 'VABS/SONATA coordinates'])
-        elif coordsys == 'ANBAX':
+        elif coordsys == 'b3_secfem':
             beam_prop_writer.writerow(['Coordinate system:', 'VABS/SONATA coordinates'])
         else:
             beam_prop_writer.writerow(['Coordinate system:', 'to be verified'])

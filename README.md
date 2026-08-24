@@ -36,11 +36,11 @@ conda activate sonata-env
 cd ..
 ```
 
-Next, in the same conda environment compile ANBA4 (open-source)
+Next, in the same conda environment compile b3_secfem4 (open-source)
 
 ```
-git clone git@github.com:ANBA4/anba4.git # (or git clone https://github.com/ANBA4/anba4.git)
-cd anba4
+git clone git@github.com:gbarter/b3_secfem4.git # (or git clone https://github.com/gbarter/b3_secfem4.git)
+cd b3_secfem4
 pip install -e .
 cd ..
 ```
@@ -100,4 +100,4 @@ Detailed instructions can be found [here](examples/2_IEA22MW/README.md). Further
 
 **Pflumm, T., Rex, W., Hajek, M.:** Propagation of Material and Manufacturing Uncertainties in Composite Helicopter Rotor Blades, 45th European Rotorcraft Forum, Warsaw, Poland, 2019 [[more…\]](https://mediatum.ub.tum.de/1520025) [BibTeX\]](https://mediatum.ub.tum.de/export/1520025/bibtex)
 
-**Porter, J. H., Mace, T., Bortolotti, P., et al.:** Prediction of structural damping in a composite structure from coupon tests, 2025, Preprint. [[link]](https://doi.org/10.2139/ssrn.5408061)
+**Porter, J. H., Mace, T., Bortolotti, P., et al.:** Novel application of the modal strain energy technique for state-of-the-art damping predictions, 2026, Composite Structures. [[link]](https://doi.org/10.1016/j.compstruct.2026.120394)

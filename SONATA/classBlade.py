@@ -24,8 +24,8 @@ from SONATA.classAirfoil import Airfoil
 from SONATA.classComponent import Component
 from SONATA.classMaterial import read_materials
 
-# SONATA anbax module
-from SONATA.anbax.classANBAXConfig import ANBAXConfig
+# SONATA b3_secfem module
+from SONATA.b3_secfem.classb3_secfemConfig import b3_secfemConfig
 
 # SONATA cbm module
 from SONATA.cbm.classCBM import CBM
@@ -165,7 +165,7 @@ class Blade(Component):
     >>> job.read_yaml(yml.get('components').get('blade'), airfoils, materials)
 
     >>> job.blade_gen_section()
-    >>> job.blade_run_anbax()
+    >>> job.blade_run_b3_secfem()
     >>> job.blade_plot_sections()
     >>> job.blade_post_3dtopo(flag_lft = True, flag_topo = True)
 
@@ -190,7 +190,7 @@ class Blade(Component):
         "f_beam_ref_axis",
         "f_soy",
         "f_curvature_k1",
-        "anba_beam_properties",
+        "b3_secfem_beam_properties",
         "wopwop_bsplinelst",
         "wopwop_pnts",
         "wopwop_vecs",
@@ -606,7 +606,7 @@ class Blade(Component):
             and order for element.
         theta_3 : float, optional
             Value for fiber orientation angle to be passed down into SONATA
-            and ANBA. If None, then zero is passed down.
+            and b3_secfem. If None, then zero is passed down.
             Units are degrees.
             The default value is None.
 
@@ -630,9 +630,9 @@ class Blade(Component):
 
         return None
 
-    def blade_run_anbax(self, loads=None, **kwargs):
+    def blade_run_b3_secfem(self, loads=None, **kwargs):
         """
-        runs anbax for every section
+        runs b3_secfem for every section
 
         Parameters
         ----------
@@ -643,7 +643,7 @@ class Blade(Component):
 
         """
 
-        ac = ANBAXConfig()
+        ac = b3_secfemConfig()
         lst = []
         for (x, cs) in self.sections:
             if loads:
@@ -652,34 +652,34 @@ class Blade(Component):
                 for k,v in load.items():
                     setattr(ac,k,v)
 
-            cs.config.anbax_cfg = ac
-            print("STATUS:\t Running ANBAX at grid location %s" % (x))
-            cs.cbm_run_anbax(**kwargs)
+            cs.config.b3_secfem_cfg = ac
+            print("STATUS:\t Running b3_secfem at grid location %s" % (x))
+            cs.cbm_run_b3_secfem(**kwargs)
             lst.append([x, cs.BeamProperties])
-        # self.anba_beam_properties = np.asarray(lst)
+        # self.b3_secfem_beam_properties = np.asarray(lst)
         self.beam_properties = np.asarray(lst)
         return None
 
     def blade_run_viscoelastic(self, **kwargs):
         """
-        Runs anbax for every section to evaluate viscoelastic 6x6 matrices.
+        Runs b3_secfem for every section to evaluate viscoelastic 6x6 matrices.
 
         """
 
-        print('Running viscoelastic analysis. This requires calling ANBAX'
+        print('Running viscoelastic analysis. This requires calling b3_secfem'
               + ' multiple times per section.')
 
-        ac = ANBAXConfig()
+        ac = b3_secfemConfig()
         lst = []
         for (x, cs) in self.sections:
 
-            cs.config.anbax_cfg = ac
+            cs.config.b3_secfem_cfg = ac
 
             print("STATUS:\t Running Viscoelastic Analysis at grid location %s" % (x))
             cs.cbm_run_viscoelastic(**kwargs)
             lst.append([x, cs.BeamProperties])
 
-        # self.anba_beam_properties = np.asarray(lst)
+        # self.b3_secfem_beam_properties = np.asarray(lst)
         self.beam_properties = np.asarray(lst)
 
         return None
@@ -724,10 +724,10 @@ class Blade(Component):
 
         """
 
-        ac = ANBAXConfig()
+        ac = b3_secfemConfig()
         for ind,(x, cs) in enumerate(self.sections):
 
-            cs.config.anbax_cfg = ac
+            cs.config.b3_secfem_cfg = ac
 
             print("STATUS:\t Running Stress and Strain Maps at %s" % (x))
 
@@ -947,7 +947,7 @@ class Blade(Component):
 
         self.start_display()
 
-    def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0, solver='anbax', filename = None):
+    def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0, solver='b3_secfem', filename = None):
         """
         Exports the beam_properties in the
 

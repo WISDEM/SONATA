@@ -334,9 +334,9 @@ class TestBeam(unittest.TestCase):
         job2.blade_custom_mesh(nodes, cells, MatID, split_quads=True,
                                theta_11=theta_11, theta_3=None)
 
-        job.blade_run_anbax()
+        job.blade_run_b3_secfem()
 
-        job2.blade_run_anbax()
+        job2.blade_run_b3_secfem()
 
         plt.close('all')
         matplotlib.use(original_backend)

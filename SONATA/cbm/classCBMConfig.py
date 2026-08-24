@@ -13,7 +13,7 @@ import numpy as np
 
 # First party modules
 from SONATA.classMaterial import find_material
-from SONATA.anbax.classANBAXConfig import ANBAXConfig
+from SONATA.b3_secfem.classb3_secfemConfig import b3_secfemConfig
 
 if __name__ == "__main__":
     os.chdir("/media/gu32kij/work/TPflumm/SONATA")
@@ -45,12 +45,12 @@ class CBMConfig(object):
     flags: dict
 
     vabs_cfg: VABSConfig
-    anbax_cfg: ANBAXConfig
+    b3_secfem_cfg: b3_secfemConfig
 
 
     """
 
-    __slots__ = ("filename", "setup", "webs", "segments", "bw", "flags", "vabs_cfg", "anbax_cfg")
+    __slots__ = ("filename", "setup", "webs", "segments", "bw", "flags", "vabs_cfg", "b3_secfem_cfg")
 
     def __init__(self, inputdata=None, materials=None):
         self.setup, self.webs, self.segments, self.bw = {}, {}, {}, {}
@@ -62,7 +62,7 @@ class CBMConfig(object):
         else:
             print("Input data is not a dictionary. Check yaml input file.")
 
-        self.anbax_cfg = ANBAXConfig()
+        self.b3_secfem_cfg = b3_secfemConfig()
         self.flags = {"mesh_core": True}
 
     def read_yaml_cbm(self, yml, materials):

@@ -21,7 +21,7 @@ class Cell(object):
     __slots__ = ("id", "nodes", "theta_1", "theta_3", "MatID", "structured",
                  "interior_nodes", "strain", "strainM", "stress", "stressM",
                  "sf", "failure_mode","fm_to_strain")
-    # fm_to_strain is the the mapping calculated with ANBA from the
+    # fm_to_strain is the the mapping calculated with b3_secfem from the
     # Force/Moment at section to the strain (using engineering shear strain)
     # within the element.
     class_counter = 1

@@ -223,7 +223,7 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations,
             beam_inertia[i, j, 0], beam_inertia[i, j, 1], beam_inertia[i, j, 2], beam_inertia[i, j, 3],
             beam_inertia[i, j, 4], beam_inertia[i, j, 5]))
         file.write('\n')
-        # ToDO: check correct translation of stiffness and mass matrices from VABS and anbax !!!
+        # ToDO: check correct translation of stiffness and mass matrices from VABS and b3_secfem !!!
     file.close()
 
     print('Finished writing BeamDyn_Blade File')
@@ -274,7 +274,7 @@ def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
                 curr_stiff[j, 3], curr_stiff[j, 4], curr_stiff[j, 5]))
             file.write('\n')
 
-        # ToDO: check correct translation of stiffness and mass matrices from VABS and anbax !!!
+        # ToDO: check correct translation of stiffness and mass matrices from VABS and b3_secfem !!!
     file.close()
 
     print('STATUS:\t Finished writing BeamDyn_Blade_Viscoelastic file.')
