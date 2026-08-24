@@ -254,11 +254,11 @@ class CBM(object):
         [intersected, intersection_pnt] = self.check_bspline_intersections(Boundary_BSplineLst)
         if intersected:
             print("WARNING: There is an intersection in the structure.")
-            plt.figure()
-            self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
-            self.display_bsplinelst(Boundary_BSplineLst, 'blue')
-            for points in intersection_pnt:
-                plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
+            # plt.figure()
+            # self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
+            # self.display_bsplinelst(Boundary_BSplineLst, 'blue')
+            # for points in intersection_pnt:
+            #     plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
 
     def cbm_gen_topo(self, **kwargs):
         """
@@ -618,7 +618,7 @@ class CBM(object):
 
         # --- Stress & Strain recovery --- #
         if  self.config.anbax_cfg.recover_flag:
-            print("STATUS:\t Running ANBAX Stress & Strain Recovery:")
+            print("STATUS:\t Running b3_secfem Stress & Strain Recovery:")
             elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, self.config.anbax_cfg.F.tolist(), self.config.anbax_cfg.M.tolist(), T)
 
             # ASSIGN stresses and strains to mesh elements in np.triu_indices_from order
