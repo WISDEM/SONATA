@@ -22,7 +22,6 @@ from OCC.Core.gp import gp_Ax2
 # First party modules
 from SONATA.cbm.cbm_utl import trsf_sixbysix
 from SONATA.cbm.classBeamSectionalProps import BeamSectionalProps
-from SONATA.cbm.classCBMConfig import CBMConfig
 
 from SONATA.cbm.display.display_mesh import plot_cells
 from SONATA.cbm.mesh.cell import Cell
@@ -39,8 +38,8 @@ from SONATA.cbm.topo.segment import Segment
 from SONATA.cbm.topo.utils import getID
 from SONATA.cbm.topo.web import Web
 from SONATA.cbm.topo.weight import Weight
-from SONATA.vabs.classStrain import Strain
-from SONATA.vabs.classStress import Stress
+from SONATA.cbm.classStrain import Strain
+from SONATA.cbm.classStress import Stress
 from SONATA.cbm.topo.projection import (
     chop_interval_from_layup, sort_layup_projection,)
 # from SONATA.vabs.classVABSConfig import VABSConfig
@@ -99,11 +98,8 @@ class CBM(object):
     cbm_review_mesh()
         prints a summary of the mesh properties to the screen
 
-    cbm_run_vabs()
-        runs the solver VABS (Variational Asymptotic Beam Sectional Analysis)
-
     cbm_run_b3_secfem()
-        runs the solver b3_secfem from macro morandini
+        runs the solver b3_secfem
 
     cbm_post_2dmesh(attribute='MatID', title='NOTITLE', **kw)
         displays the mesh with specified attributes with matplotlib
@@ -138,7 +134,6 @@ class CBM(object):
     >>> job.cbm_gen_topo()
     >>> job.cbm_gen_mesh()
     >>> job.cbm_review_mesh()
-    >>> job.cbm_run_vabs()
     >>> job.cbm_post_2dmesh(title='Hello World!')
 
     """
@@ -405,7 +400,7 @@ class CBM(object):
 
             self.mesh.extend(bw_cells)
 
-        # invert nodes list of all cell to make sure they are counterclockwise for vabs in the right coordinate system!
+        # invert nodes list of all cell to make sure they are counterclockwise
         for c in self.mesh:
             if not c.orientation:
                 c.invert_nodes()
@@ -565,7 +560,7 @@ class CBM(object):
         return None
 
     def cbm_run_b3_secfem(self):
-        """interface method to run the solver b3_secfem from marco.morandini
+        """interface method to run the solver b3_secfem
 
         Notes
         ----------
@@ -603,7 +598,7 @@ class CBM(object):
         tmp_TS = b3_secfem.K    # get stiffness matrix
         tmp_MM = b3_secfem.M    # get mass matrix
 
-        # Define transformation T (from b3_secfem to SONATA/VABS coordinates)
+        # Define transformation T (from b3_secfem to SONATA coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
 
@@ -659,7 +654,7 @@ class CBM(object):
         tmp_TS = b3_secfem.K    # get stiffness matrix
         tmp_MM = b3_secfem.M    # get mass matrix
 
-        # Define transformation T (from b3_secfem to SONATA/VABS coordinates)
+        # Define transformation T (from b3_secfem to SONATA coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
 
@@ -907,7 +902,7 @@ class CBM(object):
             print('==========================================\n\n')
             raise
 
-        # Define transformation T (from b3_secfem to SONATA/VABS coordinates)
+        # Define transformation T (from b3_secfem to SONATA coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
 
@@ -1015,7 +1010,7 @@ class CBM(object):
 
         return
 
-    def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):
+    def cbm_exp_BeamDyn_beamprops(self, Theta=0):
         """
         Converts the Beam Properties of CBM to the correct coordinate System of
         BeamDyn and returns the 6x6 Stiffness matrix, the 6x6 MassMatrix.
@@ -1031,7 +1026,6 @@ class CBM(object):
         ----------
         Theta: float, optional
             is the angle of rotation of the coordinate system in "radians"
-        solver: str, optional
 
         Returns
         ----------
@@ -1051,14 +1045,10 @@ class CBM(object):
 
 
         """
-        if solver == "vabs" or solver == "b3_secfem":
-            if Theta != 0:
-                tmp_bp = self.BeamProperties.rotate(Theta)
-            else:
-                tmp_bp = self.BeamProperties
-
+        if Theta != 0:
+            tmp_bp = self.BeamProperties.rotate(Theta)
         else:
-            print("Check solver for BeamDyn Beam Property input.")
+            tmp_bp = self.BeamProperties
 
         tmp_bp = copy.deepcopy(tmp_bp)
 
@@ -1070,53 +1060,6 @@ class CBM(object):
         tmp_MM = trsf_sixbysix(tmp_bp.MM, T)
         return (tmp_TS, tmp_MM)
 
-
-
-    def cbm_exp_dymore_beamprops(self, eta, Theta=0, solver="vabs", units={"mass": "kg", "length": "m", "force": "N"}):
-        """
-        Converts the Units of CBM to DYMORE/PYMORE/MARC units and returns the
-        array of the beamproperties with Massterms(6), Stiffness(21),
-        damping(1) and curvilinear coordinate(1)
-
-        Parameters
-        ----------
-
-        eta : float,
-            is the beam curvilinear coordinate of the beam from 0 to 1.
-
-        Theta: float
-            is the angle of rotation of the coordinate system in "radians"
-
-        Returns
-        ----------
-        arr : ndarray
-            [Massterms(6) (m00, mEta2, mEta3, m33, m23, m22)
-            Stiffness(21) (k11, k12, k22, k13, k23, k33,... k16, k26, ...k66)
-            Viscous Damping(1) mu, Curvilinear coordinate(1) eta]
-
-
-        Notes
-        ----------
-        - Unit Convertion takes sooo much time. Commented out for now!
-
-        """
-        if solver == "vabs" or solver == "b3_secfem":
-            if Theta != 0:
-                tmp_bp = self.BeamProperties.rotate(Theta)
-            else:
-                tmp_bp = self.BeamProperties
-
-        else:
-            print("Check solver for Dymore Beam Property input.")
-
-
-        MM = tmp_bp.MM
-        MASS = np.array([MM[0, 0], MM[2, 3], MM[0, 4], MM[5, 5], MM[4, 5], MM[4, 4]])
-        STIFF = tmp_bp.TS[np.tril_indices(6)[1], np.tril_indices(6)[0]]
-        mu = 0.0
-        return np.hstack((MASS, STIFF, mu, eta))
-
-
     def cbm_post_2dmesh(self, attribute="MatID", title="NOTITLE", **kw):
         """
         CBM Postprocessing method that displays the mesh with matplotlib.
@@ -1127,13 +1070,12 @@ class CBM(object):
             Uses the string to look for the cell attributes.
             The default attribute is MatID. Possible other attributes can be
             fiber orientation (theta_3) or strains and stresses.
-            If BeamProperties are already calculated by VABS or something
-            similar, elastic-axis, center-of-gravity... are displayed.
+            If BeamProperties are calculated, elastic-axis, center-of-gravity... are displayed.
         title : string, optional
             Title to be placed over the plot.
         **kw : keyword arguments, optional
             are passed to the lower "plot_cells" function. Such options are:
-            VABSProperties=None, title='None', plotTheta11=False,
+            BeamProperties=None, title='None', plotTheta11=False,
             plotDisplacement=False, savepath
 
         Returns
@@ -1149,28 +1091,3 @@ class CBM(object):
         mesh, nodes = sort_and_reassignID(self.mesh)
         fig, ax = plot_cells(self.mesh, nodes, attribute, self.materials, self.BeamProperties, title, **kw)
         return fig, ax
-
-#%%############################################################################
-#                           M    A    I    N                                  #
-###############################################################################
-if __name__ == "__main__":
-    plt.close("all")
-    fname = "jobs/debug/issue20/sec_config.yml"
-    fname = "jobs/VariSpeed/uh60a_cbm_advanced/sec_config_R2000.yml"
-    # fname = 'jobs/AREA/R250/sec_config.yml'
-    # fname = 'jobs/PBortolotti/sec_config.yml'
-    config = CBMConfig(fname)
-
-    job = CBM(config)
-
-    job.cbm_gen_topo()
-    job.cbm_gen_mesh(split_quads=True)
-
-    job.cbm_review_mesh()
-    job.cbm_run_vabs(rm_vabfiles=False)
-    # b3_secfemBeamProperties = job.cbm_run_b3_secfem()
-
-    # job.cbm_post_2dmesh(title='Hello World!')
-    job.cbm_post_3dtopo()
-#    job.config.vabs_cfg.recover_flag = 1
-#    job.config.vabs_cfg.M = [0,2000e4,0]

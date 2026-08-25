@@ -24,14 +24,14 @@ from SONATA.utl_openfast.utl_sonata2beamdyn import write_beamdyn_axis, write_bea
 def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, job_str, mu):
 
     """
-    Analyse, transform, evaluate and plot structural results from VABS and/or b3_secfem
+    Analyse, transform, evaluate and plot structural results from b3_secfem
 
     Functions:
     beam_struct_eval                    - parent function (retrieve & transform data, structure of data evaluation)
     plot_beam_props_6by6                - function to plot the 6x6 stiffness and mass matrices
     plot_beam_mass_distribution         - function to plot the beam mass per unit length distribution
-    plot_vabs_b3_secfem                     - function to plot the 6x6 stiffness and mass matrices from both VABS and b3_secfem for code-to-code verification
-    vabs_export_beam_struct_properties  - csv export of structural beam properties
+    plot_b3_secfem                     - function to plot the 6x6 stiffness and mass matrices from both b3_secfem for code-to-code verification
+    export_beam_struct_properties  - csv export of structural beam properties
     b3_secfem_export_beam_struct_properties - csv export of structural beam properties
 
     Inputs:
@@ -150,7 +150,7 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
                 b3_secfem_beam_viscoelastic[i, k, :, :] = job.beam_properties[i, 1].TSv[k]
 
     # --------------------------------------- #
-    # rotate b3_secfem results from SONATA/VABS def to BeamDyn def coordinate
+    # rotate b3_secfem results from SONATA/b3_secfem def to BeamDyn def coordinate
     # system (for flag_DeamDyn_def_transform = True)
     # OpenTurbine transform is from BeamDyn, so rotate in that case as well.
     if flags_dict['flag_DeamDyn_def_transform'] \
@@ -173,30 +173,21 @@ def beam_struct_eval(job_name, flags_dict, loads_dict, cs_pos, job, folder_str, 
         # str_ext = '_BeamDyn_def'
         coordsys = 'BeamDyn'
 
-        print('STATUS:\t Structural characteristics of b3_secfem converted from SONATA/VABS to BeamDyn coordinate system definition!')
+        print('STATUS:\t Structural characteristics of b3_secfem converted from SONATA to BeamDyn coordinate system definition!')
     else:
         b3_secfem_beam_stiff = b3_secfem_beam_stiff_init
         b3_secfem_beam_inertia = b3_secfem_beam_inertia_init
         # str_ext = ''
-        coordsys = 'VABS/SONATA'
+        coordsys = 'SONATA'
 
 
     # --------------------------------------- #
     # Export beam structural properties to csv file
     if flags_dict['flag_csv_export']:
         print('STATUS:\t Export csv files with structural blade characeristics from b3_secfem to: ' + folder_str + 'csv_export/')
-        b3_secfem_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, solver='b3_secfem', beam_stiff=b3_secfem_beam_stiff,
+        b3_secfem_export_beam_struct_properties(folder_str, job_str, cs_pos, coordsys=coordsys, beam_stiff=b3_secfem_beam_stiff,
                                         beam_inertia=b3_secfem_beam_inertia, beam_mass_per_length=b3_secfem_beam_section_mass)
 
-
-
-    # --------------------------------------- #
-    # Export beam structural properties to csv file
-    # if flags_dict['flag_csv_export']:
-    #     print('STATUS:\t Export csv files with structural blade characeristics from b3_secfem to: ' + folder_str + 'csv_export/')
-    #     export_beam_struct_properties(folder_str, job_str, cs_pos, solver='b3_secfem', beam_stiff=b3_secfem_beam_stiff, beam_inertia=b3_secfem_beam_inertia, beam_mass_per_length=b3_secfem_beam_section_mass)
-
-    # ToDo: also export BeamDyn files for results from b3_secfem as soon as the verification is completed
     # --------------------------------------- #
     # write BeamDyn input files
     np.savetxt('b3_secfem_BAR00.txt', np.array([cs_pos, b3_secfem_beam_stiff[:, 3, 3],
@@ -324,15 +315,15 @@ def plot_beam_props_6by6(cs_pos, data, fig_title, save_path):
     return None
 
 
-def plot_beam_axes(cs_pos, vabs_beam_mass_center, vabs_beam_neutral_axes, vabs_beam_geometric_center,
-               vabs_beam_shear_center, save_path):
+def plot_beam_axes(cs_pos, beam_mass_center, beam_neutral_axes, beam_geometric_center,
+               beam_shear_center, save_path):
 
     fig = plt.figure(tight_layout=True, figsize=(8, 5), dpi=80, facecolor='w', edgecolor='k')
     ax = plt.axes(projection='3d')
-    ax.plot3D(cs_pos, vabs_beam_mass_center[:,0], vabs_beam_mass_center[:,1], label='Mass center')
-    ax.plot3D(cs_pos, vabs_beam_neutral_axes[:,0], vabs_beam_neutral_axes[:,1], label='Neutral axes')
-    ax.plot3D(cs_pos, vabs_beam_geometric_center[:,0], vabs_beam_geometric_center[:,1], label='Geometric center')
-    ax.plot3D(cs_pos, vabs_beam_shear_center[:,0], vabs_beam_shear_center[:,1], label='Shear Center')
+    ax.plot3D(cs_pos, beam_mass_center[:,0], beam_mass_center[:,1], label='Mass center')
+    ax.plot3D(cs_pos, beam_neutral_axes[:,0], beam_neutral_axes[:,1], label='Neutral axes')
+    ax.plot3D(cs_pos, beam_geometric_center[:,0], beam_geometric_center[:,1], label='Geometric center')
+    ax.plot3D(cs_pos, beam_shear_center[:,0], beam_shear_center[:,1], label='Shear Center')
     ax.set_xlabel('r/R')
     ax.set_ylabel('chordwise location, m')
     ax.set_zlabel('thickness location, m')
@@ -343,11 +334,11 @@ def plot_beam_axes(cs_pos, vabs_beam_mass_center, vabs_beam_neutral_axes, vabs_b
 
     return None
 
-def plot_beam_mass_distribution(cs_pos, vabs_beam_mass_distribution, save_path):
+def plot_beam_mass_distribution(cs_pos, beam_mass_distribution, save_path):
 
     fig = plt.figure(tight_layout=True, figsize=(8, 5), dpi=80, facecolor='w', edgecolor='k')
 
-    plt.plot(cs_pos, vabs_beam_mass_distribution[:,0])
+    plt.plot(cs_pos, beam_mass_distribution[:,0])
     plt.xlabel('r/R')
     plt.ylabel('Mass per unit length, N/m')
     # plt.ylim([0, 1000])
@@ -361,18 +352,18 @@ def plot_beam_mass_distribution(cs_pos, vabs_beam_mass_distribution, save_path):
 
 
 # ============================================= #
-def plot_vabs_b3_secfem(cs_pos, vabs_data, b3_secfem_data, fig_title, save_path):
+def plot_b3_secfem(cs_pos, data, b3_secfem_data, fig_title, save_path):
     # plots 6x6 matrix
     k = 1
     fig = plt.figure(tight_layout=True, figsize=(14, 10), dpi=80, facecolor='w', edgecolor='k')
     # fig.suptitle(fig_title)
-    for i in range(len(vabs_data[0, :, 0])):
-        for j in range(len(vabs_data[0, 0, :])):
+    for i in range(len(data[0, :, 0])):
+        for j in range(len(data[0, 0, :])):
             if j >= i:
-                ax = fig.add_subplot(len(vabs_data[0, :, 0]), len(vabs_data[0, 0, :]), k)
-                ax.plot(cs_pos, vabs_data[:, i, j], '--k')
+                ax = fig.add_subplot(len(data[0, :, 0]), len(data[0, 0, :]), k)
+                ax.plot(cs_pos, data[:, i, j], '--k')
                 ax.plot(cs_pos, b3_secfem_data[:, i, j], ':r')
-                plt.ylim(1.1 * min(-1, min(vabs_data[:, i, j]), min(b3_secfem_data[:, i, j])), 1.1 * max(1, max(vabs_data[:, i, j]), max(b3_secfem_data[:, i, j])))
+                plt.ylim(1.1 * min(-1, min(data[:, i, j]), min(b3_secfem_data[:, i, j])), 1.1 * max(1, max(data[:, i, j]), max(b3_secfem_data[:, i, j])))
                 ax.set_xlabel('r/R')
                 if fig_title == 'Mass matrix':
                     ax.set_title('$m_{%i %i}$' % ((i + 1), (j + 1)))
@@ -387,16 +378,11 @@ def plot_vabs_b3_secfem(cs_pos, vabs_data, b3_secfem_data, fig_title, save_path)
 
 
 
-# ============================================= #
-def vabs_export_beam_struct_properties(folder_str, job_str, radial_stations, coordsys, solver, beam_stiff, beam_inertia, beam_mass_per_length,
-                                  beam_mass_center, beam_neutral_axes, beam_geometric_center, beam_shear_center):
+def b3_secfem_export_beam_struct_properties(folder_str, job_str, radial_stations, coordsys, beam_stiff, beam_inertia, beam_mass_per_length):
 
-    if solver=='vabs':
-        export_name_general = 'vabs_beam_properties_general.csv'
-        export_name_stiff = 'vabs_beam_properties_stiff_matrices.csv'
-        export_name_mass = 'vabs_beam_properties_mass_matrices.csv'
-    else:
-        print('Define correct solver name (vabs or b3_secfem) when calling export_beam_struct_properties')
+    export_name_general = 'b3_secfem_beam_properties_general.csv'
+    export_name_stiff = 'b3_secfem_beam_properties_stiff_matrices.csv'
+    export_name_mass = 'b3_secfem_beam_properties_mass_matrices.csv'
 
     # -------------------------------------------------- #
     # Export mass per unit length for the defined radial stations
@@ -406,78 +392,10 @@ def vabs_export_beam_struct_properties(folder_str, job_str, radial_stations, coo
         beam_prop_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
         if coordsys == 'BeamDyn':
             beam_prop_writer.writerow(['Coordinate system:', 'Beamdyn coordinates'])
-        elif coordsys == 'VABS/SONATA':
-            beam_prop_writer.writerow(['Coordinate system:', 'VABS/SONATA coordinates'])
-        else:
-            beam_prop_writer.writerow(['Coordinate system:', 'to be verified'])
-
-        beam_prop_writer.writerow(['section in r/R', 'Mass per unit length [kg/m]',
-                                      'Mass center (chordwise), m', 'Mass center (thickness), m',
-                                      'Neutral axes (chordwise), m', 'Neutral axes (thickness), m',
-                                      'Geometric center (chordwise), m', 'Geometric center (thickness), m',
-                                      'Shear center (chordwise), m', 'Shear center (thickness), m'])
-        for i in range(len(beam_mass_per_length)):  # receive number of radial sections
-            beam_prop_writer.writerow([str(radial_stations[i]), str(beam_mass_per_length[i,0]),
-                                       str(beam_mass_center[i,0]), str(beam_mass_center[i,1]),
-                                       str(beam_neutral_axes[i,0]), str(beam_neutral_axes[i,1]),
-                                       str(beam_geometric_center[i,0]), str(beam_geometric_center[i,1]),
-                                       str(beam_shear_center[i,0]), str(beam_shear_center[i,1])])
-
-    csv_file.close()
-    # -------------------------------------------------- #
-
-    # Export stiffness matrices for the defined radial stations
-    with open(''.join([folder_str + 'csv_export/' + job_str[0:-5] + '_' + export_name_stiff]), mode='w') as csv_file:
-        beam_prop_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-
-        for i in range(len(beam_stiff)):  # receive number of radial sections
-            beam_prop_writer.writerow(' ')
-            beam_prop_writer.writerow(['section in r/R', str(radial_stations[i])])
-
-            for j in range(6):  # number of rows for each matrix
-                beam_prop_writer.writerow(beam_stiff[i, j, :])
-                # beam_prop_writer.writerow(job.beam_properties[i, 1].TS[j, :])  # can eventually be called as a standalone via the job.beam_properties object
-    csv_file.close()
-
-    # -------------------------------------------------- #
-    # Export mass matrices for the defined radial stations
-    with open(''.join([folder_str + 'csv_export/' + job_str[0:-5] + '_' + export_name_mass]), mode='w') as csv_file:
-        beam_prop_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-
-        for i in range(len(beam_inertia)):  # receive number of radial sections
-            beam_prop_writer.writerow(' ')
-            beam_prop_writer.writerow(['section in r/R', str(radial_stations[i])])
-
-            for j in range(6):  # number of rows for each matrix
-                beam_prop_writer.writerow(beam_inertia[i, j, :])
-                # beam_prop_writer.writerow(job.beam_properties[i, 1].TS[j, :])  # can eventually be called as a standalone via the job.beam_properties object
-    csv_file.close()
-    # -------------------------------------------------- #
-    return None
-
-
-
-def b3_secfem_export_beam_struct_properties(folder_str, job_str, radial_stations, coordsys, solver, beam_stiff, beam_inertia, beam_mass_per_length):
-
-    if solver=='b3_secfem':
-        export_name_general = 'b3_secfem_beam_properties_general.csv'
-        export_name_stiff = 'b3_secfem_beam_properties_stiff_matrices.csv'
-        export_name_mass = 'b3_secfem_beam_properties_mass_matrices.csv'
-    else:
-        print('Define correct solver name (vabs or b3_secfem) when calling export_beam_struct_properties')
-
-    # -------------------------------------------------- #
-    # Export mass per unit length for the defined radial stations
-    if not os.path.isdir(folder_str + 'csv_export/'):
-        os.mkdir(folder_str + 'csv_export/')
-    with open(''.join([folder_str + 'csv_export/' + job_str[0:-5] + '_' + export_name_general]), mode='w') as csv_file:
-        beam_prop_writer = csv.writer(csv_file, delimiter=',', quotechar='"', quoting=csv.QUOTE_MINIMAL)
-        if coordsys == 'BeamDyn':
-            beam_prop_writer.writerow(['Coordinate system:', 'Beamdyn coordinates'])
-        elif coordsys == 'VABS/SONATA':
-            beam_prop_writer.writerow(['Coordinate system:', 'VABS/SONATA coordinates'])
+        elif coordsys == 'SONATA':
+            beam_prop_writer.writerow(['Coordinate system:', 'SONATA coordinates'])
         elif coordsys == 'b3_secfem':
-            beam_prop_writer.writerow(['Coordinate system:', 'VABS/SONATA coordinates'])
+            beam_prop_writer.writerow(['Coordinate system:', 'SONATA coordinates'])
         else:
             beam_prop_writer.writerow(['Coordinate system:', 'to be verified'])
 

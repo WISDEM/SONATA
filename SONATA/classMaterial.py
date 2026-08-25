@@ -36,8 +36,7 @@ class Material:
 
     orth : int
         orth is the flag to indicate whether the material is isotropic (0),
-        orthotropic (1) or general anisotropic (2) in consitency with VABS
-        Manual for Users (2011)
+        orthotropic (1) or general anisotropic (2)
 
     rho : float
         density in kg/m**3
@@ -397,7 +396,7 @@ class OrthotropicMaterial(Material):
         if all(k in kw for k in ('alpha_11', 'alpha_22', 'alpha_33')):
             self.alpha = np.array([kw.get('alpha_11'), kw.get('alpha_22'), kw.get('alpha_33')]).astype(float)
 
-        if flag_mat:  # wisdem includes vectors for the following material properties that are to be converted in order to comply with SONATA and VABS/b3_secfem
+        if flag_mat:  # wisdem includes vectors for the following material properties that are to be converted in order to comply with SONATA and b3_secfem
             if kw.get('Xt') is not None:
                 self.Xt = float(kw.get('Xt')[0])  # retrieve axial tensile strength in [MPa] from provided 3D vector
 

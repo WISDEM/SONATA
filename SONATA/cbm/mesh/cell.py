@@ -103,7 +103,6 @@ class Cell(object):
         (theta_11). Afterwards the ply coordinate system us ritated avizt y3 in
         the right-hand sens by the amount of Theta_3 to form the material
         system.
-        For a detailed description see docs/man/VABS-Manual.pdf Figure 4.
 
         theta_11 is calculated as the angle between the x-axis and the Vector
         from Node 1 to Node 2.

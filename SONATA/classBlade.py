@@ -127,7 +127,7 @@ class Blade(Component):
         nparray([[grid, CBM instance]],dtype = object)
 
     beam_properties : ndarray
-        array of grid location and VABSSectionalProp instance
+        array of grid location and SectionalProp instance
         nparray([[grid, beam_properties]],dtype = object)
 
 
@@ -947,7 +947,7 @@ class Blade(Component):
 
         self.start_display()
 
-    def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0, solver='b3_secfem', filename = None):
+    def blade_exp_beam_props(self, cosy='local', style='DYMORE', eta_offset=0):
         """
         Exports the beam_properties in the
 
@@ -971,10 +971,6 @@ class Blade(Component):
             coincide with the global coorinate system of the blade. The unit
             is in nondimensional r coordinates (x/Radius)
 
-        solver : str, optional
-            solver : if multiple or other solvers than vabs were applied, use
-            this option
-
         filename : str, optional
             if the user wants to write the output to a file.
 
@@ -991,10 +987,10 @@ class Blade(Component):
             # eta = -eta_offset/(1-eta_offset) + (1/(1-eta_offset))*cs[0]
             eta = (cs[0] * R) - (eta_offset * R)
             if style == "DYMORE":
-                lst.append(cs[1].cbm_exp_dymore_beamprops(eta=eta, solver=solver))
+                lst.append(cs[1].cbm_exp_dymore_beamprops(eta=eta))
 
             elif style == "BeamDyn":
-                lst.append(cs[1].cbm_exp_BeamDyn_beamprops(eta=eta, solver=solver))
+                lst.append(cs[1].cbm_exp_BeamDyn_beamprops(eta=eta))
 
             elif style == "CAMRADII":
                 pass

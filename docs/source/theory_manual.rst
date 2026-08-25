@@ -1,5 +1,0 @@
-Theory Manual
-=================
-
-Coordinate Systems
-------------------

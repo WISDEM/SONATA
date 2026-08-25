@@ -33,7 +33,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     Notes
     ----------
     the cells of cbm_mesh already contain the nodes. So the information is
-    currently passed twice. But consistent with the export_cells_for_vabs.
+    currently passed twice.
 
     """
     # Would like to avoid writing mesh to a file in the future, but for now just give dummy name
@@ -105,11 +105,11 @@ def b3_secfem_unit_recovery(b3_secfem_in, T=None):
 
     INPUTS:
     b3_secfem    -   dolfin construct from b3_secfem
-    T       -   Transformation matrix to convert results from b3_secfem to SONATA/VABS coordinates
+    T       -   Transformation matrix to convert results from b3_secfem to SONATA coordinates
 
     OUTPUTS:
-    elem_stress_tran  -   global stress field in SONATA/VABS coordinates
-    elem_strain_tran  -   global strain field in SONATA/VABS coordinates
+    elem_stress_tran  -   global stress field in SONATA coordinates
+    elem_strain_tran  -   global strain field in SONATA coordinates
     """
 
     fields  = b3_secfem.recover_unit_load_strains(b3_secfem_in) #unit_load_
@@ -149,7 +149,7 @@ def b3_secfem_unit_recovery(b3_secfem_in, T=None):
                 [strain[ii,k,4], strain[ii,k,3], strain[ii,k,2]],
             ])
 
-            # Rotate the matrix to SONATA/VABS coordinates
+            # Rotate the matrix to SONATA coordinates
             istress  = T.T @ elem_stress_mat[ ii,k,:,:] @ T
             istressM = T.T @ elem_stressM_mat[ii,k,:,:] @ T
             istrain  = T.T @ elem_strain_mat[ ii,k,:,:] @ T
@@ -176,11 +176,11 @@ def b3_secfem_recovery(b3_secfem, force, moment, T=None):
     b3_secfem    -   dolfin construct from b3_secfem
     force   -   Forces in b3_secfem coordinates, [F1, F2, F3], e.g. force = [2.2, 3.4, 1.1]
     moment  -   Moments in b3_secfem coordinates, [M1, M2, M3], e.g. moment = [4.2, 5.7, 6.2]
-    T       -   Transformation matrix to convert results from b3_secfem to SONATA/VABS coordinates
+    T       -   Transformation matrix to convert results from b3_secfem to SONATA coordinates
 
     OUTPUTS:
-    stress_sum  -   global total stress field in SONATA/VABS coordinates
-    strain_sum  -   global total strain field in SONATA/VABS coordinates
+    stress_sum  -   global total stress field in SONATA coordinates
+    strain_sum  -   global total strain field in SONATA coordinates
     """
 
     stress, stressM, strain = b3_secfem_unit_recovery(b3_secfem, T=T)

@@ -44,13 +44,12 @@ class CBMConfig(object):
 
     flags: dict
 
-    vabs_cfg: VABSConfig
     b3_secfem_cfg: b3_secfemConfig
 
 
     """
 
-    __slots__ = ("filename", "setup", "webs", "segments", "bw", "flags", "vabs_cfg", "b3_secfem_cfg")
+    __slots__ = ("filename", "setup", "webs", "segments", "bw", "flags", "b3_secfem_cfg")
 
     def __init__(self, inputdata=None, materials=None):
         self.setup, self.webs, self.segments, self.bw = {}, {}, {}, {}

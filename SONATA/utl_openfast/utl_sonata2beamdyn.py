@@ -26,14 +26,14 @@ from SONATA.cbm.cbm_utl import trsf_sixbysix
 if __name__ == '__main__':
     os.chdir('../..')
 
-# --- Convert from SONATA/VABS coordinates to BeamDyn coordinates ---#
+# --- Convert from SONATA coordinates to BeamDyn coordinates ---#
 def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
     """
     Convert structural characteristics from SONATA definition to BeamDyn definition
 
     Inputs:
         cs_pos              - array of radial stations along the span
-        SONATA_beam_prop    - data struct containing the direct results from VABS in SONATA/VABS definition; equiv to job.beam_properties
+        SONATA_beam_prop    - data struct containing the direct results from b3secfem in SONATA definition; equiv to job.beam_properties
 
     Outputs:
         BeamDyn_beam_prop   - converted data struct in BeamDyn definition
@@ -57,7 +57,7 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
     BeamDyn_beam_prop['beam_shear_center'] = np.zeros([len(cs_pos), 2])
 
     # --------------------------------------- #
-    # retrieve & allocate VABS results
+    # retrieve & allocate results
     for i in range(len(SONATA_beam_prop)):
         if SONATA_beam_prop[i, 1] is not None:
             BeamDyn_beam_prop['beam_section_mass'][i] = SONATA_beam_prop[i, 1].m00  # mass per unit span (absolute - no transform needed)
@@ -71,12 +71,12 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
                 beam_stiff_init[i, j, :] = np.array(SONATA_beam_prop[i, 1].TS[j, :])  # receive 6x6 timoshenko stiffness matrix
                 beam_inertia_init[i, j, :] = np.array(SONATA_beam_prop[i, 1].MM[j, :])  # receive 6x6 mass matrix
                 # beam_inertia_init[i, j, :] = np.array(SONATA_beam_prop[i, 1].MMatMC[j, :])  # receive 6x6 mass matrix at mass center
-        else:  # If no solution from VABS available
-            print('Radial station ' + str(cs_pos[i]) + ' did not run successfully in VABS. Check yaml input or change location!')
+        else:  # If no solution from available
+            print('Radial station ' + str(cs_pos[i]) + ' did not run successfully in b3_secfem. Check yaml input or change location!')
             # ToDo: instead of break -> skip or interpolate in between working radial stations
 
     # --------------------------------------- #
-    #  rotate VABS results from SONATA/VABS def to BeamDyn def coordinate system
+    #  rotate results from SONATA def to BeamDyn def coordinate system
 
     # B = np.array([[0, 0, 1], [0, 1, 0], [1, 0, 0]])  # transformation matrix
     B = np.array([[0, 0, 1], [0, -1, 0], [1, 0, 0]])  # NEW transformation matrix
@@ -90,7 +90,7 @@ def convert_structdef_SONATA_to_beamdyn(cs_pos, SONATA_beam_prop):
         BeamDyn_beam_prop['beam_geometric_center'][i, :] = [-beam_geometric_center_init[i, 0], beam_geometric_center_init[i, 1]]
         BeamDyn_beam_prop['beam_shear_center'][i, :] = [-beam_shear_center_init[i, 0], beam_shear_center_init[i, 1]]
 
-    print('STATUS:\t Structural characteristics of VABS converted from SONATA/VABS to BeamDyn coordinate system definition!')
+    print('STATUS:\t Structural characteristics converted from SONATA to BeamDyn coordinate system definition!')
 
     return BeamDyn_beam_prop
 
@@ -223,7 +223,7 @@ def write_beamdyn_prop(folder, flags_dict, wt_name, radial_stations,
             beam_inertia[i, j, 0], beam_inertia[i, j, 1], beam_inertia[i, j, 2], beam_inertia[i, j, 3],
             beam_inertia[i, j, 4], beam_inertia[i, j, 5]))
         file.write('\n')
-        # ToDO: check correct translation of stiffness and mass matrices from VABS and b3_secfem !!!
+        # ToDO: check correct translation of stiffness and mass matrices from SONATA and b3_secfem !!!
     file.close()
 
     print('Finished writing BeamDyn_Blade File')
@@ -274,7 +274,7 @@ def write_beamdyn_viscoelastic(folder, flags_dict, wt_name, radial_stations,
                 curr_stiff[j, 3], curr_stiff[j, 4], curr_stiff[j, 5]))
             file.write('\n')
 
-        # ToDO: check correct translation of stiffness and mass matrices from VABS and b3_secfem !!!
+        # ToDO: check correct translation of stiffness and mass matrices from SONATA and b3_secfem !!!
     file.close()
 
     print('STATUS:\t Finished writing BeamDyn_Blade_Viscoelastic file.')
