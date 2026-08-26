@@ -1,4 +1,3 @@
-import pdb
 import os
 import numpy as np
 import numpy.testing as npt
@@ -407,7 +406,7 @@ class TestVisco(unittest.TestCase):
                             err_msg="First 3 rows of viscoelastic do not add to match the elastic.")
 
         npt.assert_allclose(tot_prony[3:], stiff[0][3:],
-                           atol=1e-4*tot_prony[3:].max(), rtol=1e-2, 
+                           atol=1e-4*tot_prony[3:].max(), rtol=1e-2,
                            err_msg="Last 3 rows of viscoelastic do not add to match the elastic.")
 
 if __name__ == "__main__":

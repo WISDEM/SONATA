@@ -334,9 +334,9 @@ class TestBeam(unittest.TestCase):
         job2.blade_custom_mesh(nodes, cells, MatID, split_quads=True,
                                theta_11=theta_11, theta_3=None)
 
-        job.blade_run_anbax()
+        job.blade_run_b3_secfem()
 
-        job2.blade_run_anbax()
+        job2.blade_run_b3_secfem()
 
         plt.close('all')
         matplotlib.use(original_backend)
@@ -345,7 +345,7 @@ class TestBeam(unittest.TestCase):
 
             # 6x6 mass matrix
             npt.assert_allclose(job.beam_properties[i, 1].MM, job2.beam_properties[i, 1].MM, rtol=1e-5)
-            
+
             # 6x6 timoshenko stiffness matrix
             npt.assert_allclose(job.beam_properties[i, 1].TS, job2.beam_properties[i, 1].TS, rtol=1e-5)
 

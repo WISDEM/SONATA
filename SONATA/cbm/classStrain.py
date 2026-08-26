@@ -11,7 +11,7 @@ import os
 import numpy as np
 
 # First party modules
-from SONATA.vabs.classTensorException import TensorException
+from SONATA.cbm.classTensorException import TensorException
 
 if __name__ == "__main__":
     os.chdir("../..")

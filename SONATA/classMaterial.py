@@ -36,8 +36,7 @@ class Material:
 
     orth : int
         orth is the flag to indicate whether the material is isotropic (0),
-        orthotropic (1) or general anisotropic (2) in consitency with VABS
-        Manual for Users (2011)
+        orthotropic (1) or general anisotropic (2)
 
     rho : float
         density in kg/m**3
@@ -126,7 +125,7 @@ class Material:
         (e.g., gamma_ij = 2*eps_ij = eps_ij + eps_ji)
 
         The implementation is heavily copied from:
-            anba4/anba4/material/material.cpp/TransformationMatrix
+            b3_secfem4/b3_secfem4/material/material.cpp/TransformationMatrix
         This is added to the python implementation for easier access when doing
         extra calculations for viscoelastic materials.
 
@@ -233,7 +232,7 @@ class IsotropicMaterial(Material):
         self.alpha = None
         self.YS = None
         self.UTS = None
-        
+
         if kw.get("E") is not None:
             self.E = float(kw.get("E"))
 
@@ -278,7 +277,7 @@ class IsotropicMaterial(Material):
         (e.g., gamma_ij = 2*eps_ij = eps_ij + eps_ji)
 
         The implementation is heavily copied from:
-            anba4/anba4/material/material.cpp/IsotropicMaterial
+            b3_secfem4/b3_secfem4/material/material.cpp/IsotropicMaterial
         This is added to the python implementation for easier access when doing
         extra calculations for viscoelastic materials.
 
@@ -397,7 +396,7 @@ class OrthotropicMaterial(Material):
         if all(k in kw for k in ('alpha_11', 'alpha_22', 'alpha_33')):
             self.alpha = np.array([kw.get('alpha_11'), kw.get('alpha_22'), kw.get('alpha_33')]).astype(float)
 
-        if flag_mat:  # wisdem includes vectors for the following material properties that are to be converted in order to comply with SONATA and VABS/anbax
+        if flag_mat:  # wisdem includes vectors for the following material properties that are to be converted in order to comply with SONATA and b3_secfem
             if kw.get('Xt') is not None:
                 self.Xt = float(kw.get('Xt')[0])  # retrieve axial tensile strength in [MPa] from provided 3D vector
 
@@ -432,25 +431,26 @@ class OrthotropicMaterial(Material):
         # self.S23 = float(kw.get('S23'))
 
         self.viscoelastic = {}
-        
-        # Default b3_secfem coordinate system with fiber axis on E1
-        E1, E2, E3 = self.E #[0], m.E[1], m.E[2]
-        G12, G13, G23 = self.G #[0], m.G[1], m.G[2]
-        nu12, nu13, nu23 = self.nu #[0], m.nu[1], m.nu[2]
 
-        # If trying to trick b3_secfem to give results like Anba that has fiber axis on E3:
-        #E1, E2, E3 = self.E[1], self.E[2], self.E[0]
-        #G12, G13, G23 = self.G[2], self.G[0], self.G[1]
-        #nu12, nu31, nu32 = self.nu[2], self.nu[0], self.nu[1]
-        #nu13 = nu31*E1/E3
-        #nu23 = nu32*E2/E3
-        
-        self.b3mat = b3_secfem.OrthotropicMaterial(E1=E1, # Young's modulus, fibre [Pa] (Ezz along beam axis)
-                                            E2=E2, # Young's modulus, transverse-2 [Pa]
-                                            E3=E3, # Young's modulus, transverse-3 [Pa]
-                                            G12=G12, G13=G13, G23=G23,
-                                            nu12=nu12, nu13=nu13, nu23=nu23,
-                                            rho=self.rho, name=self.name)
+        # Map SONATA/b3_secfem4 material axes to b3_secfem's (x, y, z) principal
+        # frame the same way classMaterial.constitutive_tensor() does for
+        # b3_secfem4: at zero rotation, SONATA's fiber direction (E[0]) must sit
+        # on the beam axis (b3 axis 3 / +z), not on b3 axis 1 (+x), which is
+        # what a plain "forward the card unchanged" mapping would give.
+        # This mirrors constitutive_tensor(): e_xx=E[1], e_yy=E[2], e_zz=E[0].
+        E1_b3, E2_b3, E3_b3 = self.E[1], self.E[2], self.E[0]
+        G12_b3, G13_b3, G23_b3 = self.G[2], self.G[0], self.G[1]
+        nu12_b3, nu31_b3, nu32_b3 = self.nu[2], self.nu[0], self.nu[1]
+        # Convert the minor Poisson ratios (loading along z=fiber) to the
+        # major ratios b3_secfem expects, same relation as constitutive_tensor().
+        nu13_b3 = nu31_b3 * E1_b3 / E3_b3
+        nu23_b3 = nu32_b3 * E2_b3 / E3_b3
+
+        self.b3mat = b3_secfem.OrthotropicMaterial(
+            E1=E1_b3, E2=E2_b3, E3=E3_b3,
+            G12=G12_b3, G13=G13_b3, G23=G23_b3,
+            nu12=nu12_b3, nu13=nu13_b3, nu23=nu23_b3,
+            rho=self.rho, name=self.name)
 
     '''
     # Using the abstract version that calls the b3_secfem materials class instead
@@ -478,7 +478,7 @@ class OrthotropicMaterial(Material):
         (e.g., gamma_ij = 2*eps_ij = eps_ij + eps_ji)
 
         The implementation is heavily copied from:
-            anba4/anba4/material/material.cpp/OrthotropicMaterial
+            b3_secfem4/b3_secfem4/material/material.cpp/OrthotropicMaterial
         This is added to the python implementation for easier access when doing
         extra calculations for viscoelastic materials.
 
@@ -488,8 +488,8 @@ class OrthotropicMaterial(Material):
         """
 
         # using tensor direction indices z=1, x=2, y=3
-        # (anba uses this direction ordering to return stress/strain)
-        # Implementation should match anbax_util.py > build_mat_library.
+        # (b3_secfem uses this direction ordering to return stress/strain)
+        # Implementation should match b3_secfem_util.py > build_mat_library.
         #
         # This means elastic modulus order should be:
         #   [Along Beam, Along Perimeter, Through Thickness]

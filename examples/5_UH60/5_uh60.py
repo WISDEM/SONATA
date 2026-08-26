@@ -30,7 +30,7 @@ Problem Setup:
 Analysis Objectives:
 =====================
 - Generate finite element mesh for the composite cross-section
-- Compute sectional properties using ANBAX (Asymptotic Numerical Beam Analysis eXtended)
+- Compute sectional properties using b3_secfem (Asymptotic Numerical Beam Analysis eXtended)
 - Evaluate structural response and material distribution
 - Validate against reference solutions from literature
 
@@ -118,8 +118,8 @@ job = Blade(
 print("Generating sections and mesh...")
 job.blade_gen_section(topo_flag=True, mesh_flag=True)
 
-print("Running ANBAX analysis...")
-# job.blade_run_anbax() # call through beam_struct_eval instead to save outputs
+print("Running b3_secfem analysis...")
+# job.blade_run_b3_secfem() # call through beam_struct_eval instead to save outputs
 
 flags_dict['flag_csv_export'] = flag_csv_export
 flags_dict['flag_write_BeamDyn_unit_convert'] = flag_write_BeamDyn_unit_convert

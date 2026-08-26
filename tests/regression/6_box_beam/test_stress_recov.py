@@ -999,7 +999,7 @@ class TestStressStrain(unittest.TestCase):
         npt.assert_allclose(stress, elem_stress, atol=1e-18, err_msg='Stresses are different on loaded recovery.')
 
         npt.assert_allclose(strain, elem_strain, atol=1e-7, err_msg='Strains are different on loaded recovery.')
-        
+
     def test_stress_map_zero_twist(self):
         """
         Test that the stress maps are correctly rotated to stay with the GEBT

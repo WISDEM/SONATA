@@ -15,8 +15,12 @@ dependencies:
   - pre-commit
   - shapely
   - windIO
+  - fenics-basix
+  - fenics-ufl
+  - fenics-dolfinx
+  - mpi4py
   - pip:
-    - triangle
+    - OCC
 
 variables:
   PIP_EXTRA_INDEX_URL: https://pypi.org/simple

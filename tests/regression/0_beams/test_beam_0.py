@@ -48,7 +48,7 @@ class TestBeam(unittest.TestCase):
           job = Blade(name=job_name, filename=filename_str, flags=flags_dict, stations=radial_stations)
           job.blade_gen_section(topo_flag=True, mesh_flag = True)
 
-          job.blade_run_anbax()
+          job.blade_run_b3_secfem()
 
           ###########################################################################
           ######## Checks on if answer looks consistent with previous runs ##########

@@ -22,7 +22,6 @@ from OCC.Core.gp import gp_Ax2
 # First party modules
 from SONATA.cbm.cbm_utl import trsf_sixbysix
 from SONATA.cbm.classBeamSectionalProps import BeamSectionalProps
-from SONATA.cbm.classCBMConfig import CBMConfig
 
 from SONATA.cbm.display.display_mesh import plot_cells
 from SONATA.cbm.mesh.cell import Cell
@@ -39,8 +38,8 @@ from SONATA.cbm.topo.segment import Segment
 from SONATA.cbm.topo.utils import getID
 from SONATA.cbm.topo.web import Web
 from SONATA.cbm.topo.weight import Weight
-from SONATA.vabs.classStrain import Strain
-from SONATA.vabs.classStress import Stress
+from SONATA.cbm.classStrain import Strain
+from SONATA.cbm.classStress import Stress
 from SONATA.cbm.topo.projection import (
     chop_interval_from_layup, sort_layup_projection,)
 # from SONATA.vabs.classVABSConfig import VABSConfig
@@ -50,11 +49,11 @@ from OCC.Core.Geom2dAPI import Geom2dAPI_InterCurveCurve
 from OCC.Core.gp import gp_Pnt2d
 
 try:
-    from SONATA.anbax.anbax_utl import dolfin_solve, anbax_unit_recovery, anbax_recovery
+    from SONATA.b3_secfem.b3_secfem_utl import dolfin_solve, b3_secfem_unit_recovery, b3_secfem_recovery
 
 
 except:
-    print("dolfin and anbax could not be imported!")
+    print("dolfin and b3_secfem could not be imported!")
     raise
 
 
@@ -99,11 +98,8 @@ class CBM(object):
     cbm_review_mesh()
         prints a summary of the mesh properties to the screen
 
-    cbm_run_vabs()
-        runs the solver VABS (Variational Asymptotic Beam Sectional Analysis)
-
-    cbm_run_anbax()
-        runs the solver anbax from macro morandini
+    cbm_run_b3_secfem()
+        runs the solver b3_secfem
 
     cbm_post_2dmesh(attribute='MatID', title='NOTITLE', **kw)
         displays the mesh with specified attributes with matplotlib
@@ -138,7 +134,6 @@ class CBM(object):
     >>> job.cbm_gen_topo()
     >>> job.cbm_gen_mesh()
     >>> job.cbm_review_mesh()
-    >>> job.cbm_run_vabs()
     >>> job.cbm_post_2dmesh(title='Hello World!')
 
     """
@@ -254,11 +249,11 @@ class CBM(object):
         [intersected, intersection_pnt] = self.check_bspline_intersections(Boundary_BSplineLst)
         if intersected:
             print("WARNING: There is an intersection in the structure.")
-            plt.figure()
-            self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
-            self.display_bsplinelst(Boundary_BSplineLst, 'blue')
-            for points in intersection_pnt:
-                plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
+            # plt.figure()
+            # self.display_bsplinelst(self.SegmentLst[0].BSplineLst, 'black')
+            # self.display_bsplinelst(Boundary_BSplineLst, 'blue')
+            # for points in intersection_pnt:
+            #     plt.plot(points.X(), points.Y(), 'x', color = 'red', linewidth = 4, markersize = 10)
 
     def cbm_gen_topo(self, **kwargs):
         """
@@ -405,7 +400,7 @@ class CBM(object):
 
             self.mesh.extend(bw_cells)
 
-        # invert nodes list of all cell to make sure they are counterclockwise for vabs in the right coordinate system!
+        # invert nodes list of all cell to make sure they are counterclockwise
         for c in self.mesh:
             if not c.orientation:
                 c.invert_nodes()
@@ -509,7 +504,7 @@ class CBM(object):
             reading the custom mesh.
         theta_3 : float, optional
             Value for fiber orientation angle to be passed down into SONATA
-            and ANBA. If None, then zero is passed down. Units are degrees.
+            and b3_secfem. If None, then zero is passed down. Units are degrees.
             The default value is None.
 
         Returns
@@ -564,8 +559,8 @@ class CBM(object):
 
         return None
 
-    def cbm_run_anbax(self):
-        """interface method to run the solver anbax from marco.morandini
+    def cbm_run_b3_secfem(self):
+        """interface method to run the solver b3_secfem
 
         Notes
         ----------
@@ -589,21 +584,21 @@ class CBM(object):
 
 
         try:
-            anba = dolfin_solve(self.mesh, nodes, self.materials)
+            b3_secfem = dolfin_solve(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
-            print('Error, Anba4 wrapper called, likely ')
-            print('Anba4 _or_ Dolfin are not installed\n\n')
+            print('Error, b3_secfem4 wrapper called, likely ')
+            print('b3_secfem4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
             raise
 
 
-        #TBD: pass it to anbax and run it!
-        tmp_TS = anba.K    # get stiffness matrix
-        tmp_MM = anba.M    # get mass matrix
+        #TBD: pass it to b3_secfem and run it!
+        tmp_TS = b3_secfem.K    # get stiffness matrix
+        tmp_MM = b3_secfem.M    # get mass matrix
 
-        # Define transformation T (from ANBA to SONATA/VABS coordinates)
+        # Define transformation T (from b3_secfem to SONATA coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
 
@@ -611,15 +606,15 @@ class CBM(object):
         self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
         self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
 
-        # self.BeamProperties.Xm = anba.mass_center  # mass center - is already allocated from mass matrix
-        self.BeamProperties.Xt = anba.tension_center
-        self.BeamProperties.Xs = anba.shear_center
+        # self.BeamProperties.Xm = b3_secfem.mass_center  # mass center - is already allocated from mass matrix
+        self.BeamProperties.Xt = b3_secfem.tension_center
+        self.BeamProperties.Xs = b3_secfem.shear_center
 
 
         # --- Stress & Strain recovery --- #
-        if  self.config.anbax_cfg.recover_flag:
-            print("STATUS:\t Running ANBAX Stress & Strain Recovery:")
-            elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, self.config.anbax_cfg.F.tolist(), self.config.anbax_cfg.M.tolist(), T)
+        if  self.config.b3_secfem_cfg.recover_flag:
+            print("STATUS:\t Running b3_secfem Stress & Strain Recovery:")
+            elem_stress, elem_stressM, elem_strain = b3_secfem_recovery(b3_secfem, self.config.b3_secfem_cfg.F.tolist(), self.config.b3_secfem_cfg.M.tolist(), T)
 
             # ASSIGN stresses and strains to mesh elements in np.triu_indices_from order
             for i,c in enumerate(self.mesh):
@@ -645,21 +640,21 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            anba = dolfin_solve(self.mesh, nodes, self.materials)
+            b3_secfem = dolfin_solve(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
-            print('Error, Anba4 wrapper called, likely ')
-            print('Anba4 _or_ Dolfin are not installed\n\n')
+            print('Error, b3_secfem4 wrapper called, likely ')
+            print('b3_secfem4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
             raise
 
 
-        # Call ANBAX with baseline properties
-        tmp_TS = anba.K    # get stiffness matrix
-        tmp_MM = anba.M    # get mass matrix
+        # Call b3_secfem with baseline properties
+        tmp_TS = b3_secfem.K    # get stiffness matrix
+        tmp_MM = b3_secfem.M    # get mass matrix
 
-        # Define transformation T (from ANBA to SONATA/VABS coordinates)
+        # Define transformation T (from b3_secfem to SONATA coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
 
@@ -667,20 +662,20 @@ class CBM(object):
         self.BeamProperties.TS = trsf_sixbysix(tmp_TS, T)
         self.BeamProperties.MM = trsf_sixbysix(tmp_MM, T)
 
-        # self.BeamProperties.Xm = anba.mass_center  # mass center - is already allocated from mass matrix
-        self.BeamProperties.Xt = anba.tension_center
-        self.BeamProperties.Xs = anba.shear_center
+        # self.BeamProperties.Xm = b3_secfem.mass_center  # mass center - is already allocated from mass matrix
+        self.BeamProperties.Xt = b3_secfem.tension_center
+        self.BeamProperties.Xs = b3_secfem.shear_center
         #print(self.BeamProperties.TS)
         #print(self.BeamProperties.MM)
         #print(self.BeamProperties.Xt)
         #print(self.BeamProperties.Xs)
-        
+
         # Recover the mapping from sectional Forces and Moments to Strain
-        # in a non-invasive way from ANBA
-        elem_stress, _, elem_strain = anbax_unit_recovery(anba, T)
+        # in a non-invasive way from b3_secfem
+        elem_stress, _, elem_strain = b3_secfem_unit_recovery(b3_secfem, T)
 
         # Reordering is necessary from the conventional stress/strain order
-        # to match the constitutive tensor built from ANBAX.
+        # to match the constitutive tensor built from b3_secfem.
         # Both the strains and stresses need reordering so setting it here.
         # All other orders here were tested and verified to give wrong results.
         reorder_stress_strain = np.array([1, 2, 0, 4, 5, 3])
@@ -898,16 +893,16 @@ class CBM(object):
         self.mesh, nodes = sort_and_reassignID(self.mesh)
 
         try:
-            anba = dolfin_solve(self.mesh, nodes, self.materials)
+            b3_secfem = dolfin_solve(self.mesh, nodes, self.materials)
         except:
             print('\n')
             print('==========================================\n\n')
-            print('Error, Anba4 wrapper called, likely ')
-            print('Anba4 _or_ Dolfin are not installed\n\n')
+            print('Error, b3_secfem4 wrapper called, likely ')
+            print('b3_secfem4 _or_ Dolfin are not installed\n\n')
             print('==========================================\n\n')
             raise
 
-        # Define transformation T (from ANBA to SONATA/VABS coordinates)
+        # Define transformation T (from b3_secfem to SONATA coordinates)
         B = np.array([[0, 0, 1], [1, 0, 0], [0, 1, 0]])
         T = np.dot(np.identity(3), np.linalg.inv(B))
 
@@ -925,7 +920,7 @@ class CBM(object):
             elem_materials[i] = c.MatID
             elem_cxy[i, :] = c.center
 
-        # 2. Call ANBA looping over unit forces/moments
+        # 2. Call b3_secfem looping over unit forces/moments
 
         # Mapping should match `beam_struct_eval`
         external_to_internal_ind = [2, 0, 1]
@@ -953,7 +948,7 @@ class CBM(object):
             # This ends up being potentially excessively slow since
             # it does a new calculation for each stress and strain field (4),
             # but only need the material coordinate strain field.
-            elem_stress, elem_stressM, elem_strain = anbax_recovery(anba, F, M, T)
+            elem_stress, elem_stressM, elem_strain = b3_secfem_recovery(b3_secfem, F, M, T)
 
             # 3. Store Strain results in each case / element
             fc_to_strain_m[:, i, :] = elem_strain.T
@@ -1015,7 +1010,7 @@ class CBM(object):
 
         return
 
-    def cbm_exp_BeamDyn_beamprops(self, Theta=0, solver="vabs"):
+    def cbm_exp_BeamDyn_beamprops(self, Theta=0):
         """
         Converts the Beam Properties of CBM to the correct coordinate System of
         BeamDyn and returns the 6x6 Stiffness matrix, the 6x6 MassMatrix.
@@ -1031,7 +1026,6 @@ class CBM(object):
         ----------
         Theta: float, optional
             is the angle of rotation of the coordinate system in "radians"
-        solver: str, optional
 
         Returns
         ----------
@@ -1051,14 +1045,10 @@ class CBM(object):
 
 
         """
-        if solver == "vabs" or solver == "anbax":
-            if Theta != 0:
-                tmp_bp = self.BeamProperties.rotate(Theta)
-            else:
-                tmp_bp = self.BeamProperties
-
+        if Theta != 0:
+            tmp_bp = self.BeamProperties.rotate(Theta)
         else:
-            print("Check solver for BeamDyn Beam Property input.")
+            tmp_bp = self.BeamProperties
 
         tmp_bp = copy.deepcopy(tmp_bp)
 
@@ -1070,53 +1060,6 @@ class CBM(object):
         tmp_MM = trsf_sixbysix(tmp_bp.MM, T)
         return (tmp_TS, tmp_MM)
 
-
-
-    def cbm_exp_dymore_beamprops(self, eta, Theta=0, solver="vabs", units={"mass": "kg", "length": "m", "force": "N"}):
-        """
-        Converts the Units of CBM to DYMORE/PYMORE/MARC units and returns the
-        array of the beamproperties with Massterms(6), Stiffness(21),
-        damping(1) and curvilinear coordinate(1)
-
-        Parameters
-        ----------
-
-        eta : float,
-            is the beam curvilinear coordinate of the beam from 0 to 1.
-
-        Theta: float
-            is the angle of rotation of the coordinate system in "radians"
-
-        Returns
-        ----------
-        arr : ndarray
-            [Massterms(6) (m00, mEta2, mEta3, m33, m23, m22)
-            Stiffness(21) (k11, k12, k22, k13, k23, k33,... k16, k26, ...k66)
-            Viscous Damping(1) mu, Curvilinear coordinate(1) eta]
-
-
-        Notes
-        ----------
-        - Unit Convertion takes sooo much time. Commented out for now!
-
-        """
-        if solver == "vabs" or solver == "anbax":
-            if Theta != 0:
-                tmp_bp = self.BeamProperties.rotate(Theta)
-            else:
-                tmp_bp = self.BeamProperties
-
-        else:
-            print("Check solver for Dymore Beam Property input.")
-
-
-        MM = tmp_bp.MM
-        MASS = np.array([MM[0, 0], MM[2, 3], MM[0, 4], MM[5, 5], MM[4, 5], MM[4, 4]])
-        STIFF = tmp_bp.TS[np.tril_indices(6)[1], np.tril_indices(6)[0]]
-        mu = 0.0
-        return np.hstack((MASS, STIFF, mu, eta))
-
-
     def cbm_post_2dmesh(self, attribute="MatID", title="NOTITLE", **kw):
         """
         CBM Postprocessing method that displays the mesh with matplotlib.
@@ -1127,13 +1070,12 @@ class CBM(object):
             Uses the string to look for the cell attributes.
             The default attribute is MatID. Possible other attributes can be
             fiber orientation (theta_3) or strains and stresses.
-            If BeamProperties are already calculated by VABS or something
-            similar, elastic-axis, center-of-gravity... are displayed.
+            If BeamProperties are calculated, elastic-axis, center-of-gravity... are displayed.
         title : string, optional
             Title to be placed over the plot.
         **kw : keyword arguments, optional
             are passed to the lower "plot_cells" function. Such options are:
-            VABSProperties=None, title='None', plotTheta11=False,
+            BeamProperties=None, title='None', plotTheta11=False,
             plotDisplacement=False, savepath
 
         Returns
@@ -1149,28 +1091,3 @@ class CBM(object):
         mesh, nodes = sort_and_reassignID(self.mesh)
         fig, ax = plot_cells(self.mesh, nodes, attribute, self.materials, self.BeamProperties, title, **kw)
         return fig, ax
-
-#%%############################################################################
-#                           M    A    I    N                                  #
-###############################################################################
-if __name__ == "__main__":
-    plt.close("all")
-    fname = "jobs/debug/issue20/sec_config.yml"
-    fname = "jobs/VariSpeed/uh60a_cbm_advanced/sec_config_R2000.yml"
-    # fname = 'jobs/AREA/R250/sec_config.yml'
-    # fname = 'jobs/PBortolotti/sec_config.yml'
-    config = CBMConfig(fname)
-
-    job = CBM(config)
-
-    job.cbm_gen_topo()
-    job.cbm_gen_mesh(split_quads=True)
-
-    job.cbm_review_mesh()
-    job.cbm_run_vabs(rm_vabfiles=False)
-    # AnbaBeamProperties = job.cbm_run_anbax()
-
-    # job.cbm_post_2dmesh(title='Hello World!')
-    job.cbm_post_3dtopo()
-#    job.config.vabs_cfg.recover_flag = 1
-#    job.config.vabs_cfg.M = [0,2000e4,0]

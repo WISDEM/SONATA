@@ -21,7 +21,7 @@ class Cell(object):
     __slots__ = ("id", "nodes", "theta_1", "theta_3", "MatID", "structured",
                  "interior_nodes", "strain", "strainM", "stress", "stressM",
                  "sf", "failure_mode","fm_to_strain")
-    # fm_to_strain is the the mapping calculated with ANBA from the
+    # fm_to_strain is the the mapping calculated with b3_secfem from the
     # Force/Moment at section to the strain (using engineering shear strain)
     # within the element.
     class_counter = 1
@@ -103,7 +103,6 @@ class Cell(object):
         (theta_11). Afterwards the ply coordinate system us ritated avizt y3 in
         the right-hand sens by the amount of Theta_3 to form the material
         system.
-        For a detailed description see docs/man/VABS-Manual.pdf Figure 4.
 
         theta_11 is calculated as the angle between the x-axis and the Vector
         from Node 1 to Node 2.

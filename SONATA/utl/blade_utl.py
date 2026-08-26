@@ -46,8 +46,6 @@ def interp_loads(loads, grid_loc):
     ----------
     loads : dict
         dictionary of the following keys and values, (default=None)
-        for detailed information see the VABSConfig documentation or the
-        VABS user manual
         F : nparray([[grid, F1, F2, F3]])
         M : nparray([[grid, M1, M2, M3]])
         f : nparray([[grid, f1, f2, f2]])
@@ -63,8 +61,6 @@ def interp_loads(loads, grid_loc):
     ----------
     sectional_load : dict
     dictionary of the following keys and values, (default=None)
-        for detailed information see the VABSConfig documentation or the
-        VABS user manual
         F : nparray([F1, F2, F3])
         M : nparray([M1, M2, M3])
         f : nparray([f1, f2, f2])

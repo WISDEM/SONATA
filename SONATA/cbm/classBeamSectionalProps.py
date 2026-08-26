@@ -20,14 +20,7 @@ if __name__ == "__main__":
 
 class BeamSectionalProps(object):
     """
-    this class stores the beam cross-sectional data and has methods to
-    read the result files from vabs
-
-    The coordinate system follows the definition of VABS and DYMORE.
-    For more information see the the vabs and dymore user manual.
-    the x/x1 axis is in the direction of the beam. the y/x2 axis points towards
-    the leading edge, and z/x3 points accordingly upwards.
-
+    this class stores the beam cross-sectional data
     The 6x6 sectional stiffness matrix, TS (Timoshenko Stiffness Matrix)
     (1-extension; 2,3-shear, 4-twist; 5,6-bending) relates the sectional axial
     strain, epsilon1, transverse shearing strains, epsilon2 and epsilon3,
@@ -152,9 +145,6 @@ class BeamSectionalProps(object):
 
         self.ELE = None
         self.U = None
-
-        if fname:
-            self.read_vabs_K(fname)
 
     @property
     def m00(self):

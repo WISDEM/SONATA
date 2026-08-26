@@ -11,7 +11,7 @@ description = "Multidiciplinary Rotor Blade Design Environment for Structural Op
 readme = "README.md"
 requires-python = ">=3.9"
 license = {text = "MIT"}
-keywords = ["Helicopter","Rotor Blade","OpenMdao","Preprocessor","SONATA","VABS","ANBA"]
+keywords = ["Helicopter","Rotor Blade","OpenMMDAO","Preprocessor","SONATA", "b3_secfem"]
 classifiers = [  # Optional
   # How mature is this project? Common values are
   #   3 - Alpha
@@ -45,13 +45,7 @@ dependencies = [
   "openmdao",
   "windio",
   "matplotlib",
-  "fenics-basix",
-  "fenics-ufl",
-  "fenics-dolfinx",
-  "mpi4py",
-  "OCC"
 ]
-#  "dolfinx",
 
 [project.urls]  # Optional
 #"Homepage" = "https://gitlab.lrz.de/rfeil/SONATA"

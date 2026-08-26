@@ -7,10 +7,10 @@ Created on Wed Apr 01 14:15:44 2020
 import numpy as np
 
 
-class ANBAXConfig(object):
+class b3_secfemConfig(object):
 
     """
-    this class contains the Configuration for a anbax
+    this class contains the Configuration for a b3_secfem
 
     Attributes:
     ----------
@@ -29,7 +29,7 @@ class ANBAXConfig(object):
     def __init__(self, **kw):
         self.recover_flag = 0
         self.ref_sys = "global"
-        self.voigt_convention = "anba"
+        self.voigt_convention = "b3_secfem"
 
         if "recover_flag" in kw:
             self.recover_flag = kw["recover_flag"]
@@ -40,4 +40,4 @@ class ANBAXConfig(object):
 
 
 if __name__ == "__main__":
-    test = ANBAXConfig(recover_flag=1)
+    test = b3_secfemConfig(recover_flag=1)

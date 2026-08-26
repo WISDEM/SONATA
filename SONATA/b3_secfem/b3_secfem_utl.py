@@ -10,7 +10,7 @@ from dolfinx import io
 
 def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     """function to generate the dolfin.Mesh from a SONATA-CBM definition to run
-    with anbax
+    with b3_secfem
 
     Parameters
     ----------
@@ -24,7 +24,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     Returns
     ----------
     mesh : dolfin.Mesh
-    matLibrary : vector of anbax materials
+    matLibrary : vector of b3_secfem materials
     materials : dolfin.MeshFunction definign cell materials
     plane_orientations : dolfin.MeshFunction defining cell plane orientations
     fiber_orientations : dolfin.MeshFunction defining cell material fiber orientation
@@ -33,7 +33,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     Notes
     ----------
     the cells of cbm_mesh already contain the nodes. So the information is
-    currently passed twice. But consistent with the export_cells_for_vabs.
+    currently passed twice.
 
     """
     # Would like to avoid writing mesh to a file in the future, but for now just give dummy name
@@ -47,7 +47,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     coords = np.zeros((len(cbm_nodes), 2))
     for n in cbm_nodes:
         coords[n.id-1,:] = n.coordinates
-        
+
     n_cells = len(cbm_mesh)
     tris = np.zeros((n_cells, 3), dtype=np.int32)
     fiber_orientations = np.zeros(n_cells)
@@ -69,7 +69,7 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
     materials_vec = [materials_vec[m] for m in oci]
     fiber_orientations = fiber_orientations[oci]
     plane_orientations = plane_orientations[oci]
-    
+
     # This meshtag doesn't do anything if not using the "region_mat" approach, but code complains if no tags are given
     indices = np.arange(n_cells, dtype=np.int32)
     values = np.array([c.id-1 for c in cbm_mesh], dtype=np.int32)
@@ -94,32 +94,32 @@ def dolfin_solve(cbm_mesh, cbm_nodes, cbm_materials):
 
     # Keep oci tracker consistent
     result.oci = oci[result.oci]
-    
+
     return result
 
 
-def anbax_unit_recovery(anba, T=None):
+def b3_secfem_unit_recovery(b3_secfem_in, T=None):
     """
     Function to recover unit stresses and strains from an applied loading
     Results are generated in global coordinates with dimensions: ([3 unit F + 3 unit M, num elements, 6 voigt])
 
     INPUTS:
-    anba    -   dolfin construct from anbax
-    T       -   Transformation matrix to convert results from ANBA to SONATA/VABS coordinates
+    b3_secfem    -   dolfin construct from b3_secfem
+    T       -   Transformation matrix to convert results from b3_secfem to SONATA coordinates
 
     OUTPUTS:
-    elem_stress_tran  -   global stress field in SONATA/VABS coordinates
-    elem_strain_tran  -   global strain field in SONATA/VABS coordinates
+    elem_stress_tran  -   global stress field in SONATA coordinates
+    elem_strain_tran  -   global strain field in SONATA coordinates
     """
 
-    fields  = b3_secfem.recover_unit_load_strains(anba) #unit_load_
+    fields  = b3_secfem.recover_unit_load_strains(b3_secfem_in) #unit_load_
     stress  = fields.sigma.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
     stressM = fields.sigma_mat.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
     strain  = fields.epsilon.copy() # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
 
     if T is None:
         T = np.eye(3)
-    
+
     # Initialize the outputs:
     elem_stress_tran  = np.zeros(stress.shape)
     elem_stressM_tran = np.zeros(stress.shape)
@@ -149,7 +149,7 @@ def anbax_unit_recovery(anba, T=None):
                 [strain[ii,k,4], strain[ii,k,3], strain[ii,k,2]],
             ])
 
-            # Rotate the matrix to SONATA/VABS coordinates
+            # Rotate the matrix to SONATA coordinates
             istress  = T.T @ elem_stress_mat[ ii,k,:,:] @ T
             istressM = T.T @ elem_stressM_mat[ii,k,:,:] @ T
             istrain  = T.T @ elem_strain_mat[ ii,k,:,:] @ T
@@ -158,32 +158,32 @@ def anbax_unit_recovery(anba, T=None):
             elem_stress_tran[ ii,k,:] = np.r_[np.diag(istress ), istress[ 1,2], istress[ 0,2], istress[ 0,1]]
             elem_stressM_tran[ii,k,:] = np.r_[np.diag(istressM), istressM[1,2], istressM[0,2], istressM[0,1]]
             elem_strain_tran[ ii,k,:] = np.r_[np.diag(istrain ), istrain[ 1,2], istrain[ 0,2], istrain[ 0,1]]
-            
-    oci2orig = np.argsort(anba.oci)
+
+    oci2orig = np.argsort(b3_secfem_in.oci)
     elem_stress_tran  = elem_stress_tran[ :,oci2orig,:]
     elem_stressM_tran = elem_stressM_tran[:,oci2orig,:]
     elem_strain_tran  = elem_strain_tran[ :,oci2orig,:]
-    
+
     return elem_stress_tran, elem_stressM_tran, elem_strain_tran
 
 
-def anbax_recovery(anba, force, moment, T=None):
+def b3_secfem_recovery(b3_secfem, force, moment, T=None):
     """
     Function to recover total stresses and strains from an applied loading
     Results are generated in global coordinates with dimensions: ([num elements, 6 voigt])
 
     INPUTS:
-    anba    -   dolfin construct from anbax
-    force   -   Forces in anbax coordinates, [F1, F2, F3], e.g. force = [2.2, 3.4, 1.1]
-    moment  -   Moments in anbax coordinates, [M1, M2, M3], e.g. moment = [4.2, 5.7, 6.2]
-    T       -   Transformation matrix to convert results from ANBA to SONATA/VABS coordinates
+    b3_secfem    -   dolfin construct from b3_secfem
+    force   -   Forces in b3_secfem coordinates, [F1, F2, F3], e.g. force = [2.2, 3.4, 1.1]
+    moment  -   Moments in b3_secfem coordinates, [M1, M2, M3], e.g. moment = [4.2, 5.7, 6.2]
+    T       -   Transformation matrix to convert results from b3_secfem to SONATA coordinates
 
     OUTPUTS:
-    stress_sum  -   global total stress field in SONATA/VABS coordinates
-    strain_sum  -   global total strain field in SONATA/VABS coordinates
+    stress_sum  -   global total stress field in SONATA coordinates
+    strain_sum  -   global total strain field in SONATA coordinates
     """
-    
-    stress, stressM, strain = anbax_unit_recovery(anba, T=T)
+
+    stress, stressM, strain = b3_secfem_unit_recovery(b3_secfem, T=T)
     n_el = stress.shape[1]
 
     # Rotate forces and moments
@@ -192,7 +192,7 @@ def anbax_recovery(anba, force, moment, T=None):
     else:
         myforce  = T.T @ force @ T
         mymoment = T.T @ moment @ T
-        
+
     # Add up total stress and strain through super-position linear combo of unit forces and moments
     stress_sum  = np.zeros((n_el,6))
     stressM_sum = np.zeros((n_el,6))
@@ -200,10 +200,10 @@ def anbax_recovery(anba, force, moment, T=None):
     for k in range(3):
         stress_sum += myforce[ k] * stress[  k,:,:]
         stress_sum += mymoment[k] * stress[3+k,:,:]
-        
+
         stressM_sum += myforce[ k] * stressM[  k,:,:]
         stressM_sum += mymoment[k] * stressM[3+k,:,:]
-        
+
         strain_sum += myforce[ k] * strain[  k,:,:]
         strain_sum += mymoment[k] * strain[3+k,:,:]
 

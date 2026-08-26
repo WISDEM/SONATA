@@ -18,7 +18,7 @@ jobs:
       fail-fast: False
       matrix:
         os: [ubuntu-latest, macos-latest]
-        python-version: ["3.9", "3.10", "3.11"]
+        python-version: ["3.13", "3.14"]
 
     steps:
       - name: checkout repository
@@ -36,10 +36,10 @@ jobs:
           activate-environment: test
           auto-activate-base: false
 
-      - name: Download and install anba
+      - name: Download and install b3_secfem
         run: |
-          git clone https://github.com/ANBA4/anba4.git
-          cd anba4
+          git clone git@github.com:gbarter/b3_secfem.git
+          cd b3_secfem
           pip install -e .
 
       - name: Install SONATA
