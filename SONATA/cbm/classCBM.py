@@ -614,7 +614,7 @@ class CBM(object):
         # --- Stress & Strain recovery --- #
         if  self.config.b3_secfem_cfg.recover_flag:
             print("STATUS:\t Running b3_secfem Stress & Strain Recovery:")
-            elem_stress, elem_stressM, elem_strain = b3_secfem_recovery(b3_secfem, self.config.b3_secfem_cfg.F.tolist(), self.config.b3_secfem_cfg.M.tolist(), T)
+            elem_stress, elem_stressM, elem_strain, elem_strainM = b3_secfem_recovery(b3_secfem, self.config.b3_secfem_cfg.F.tolist(), self.config.b3_secfem_cfg.M.tolist(), T)
 
             # ASSIGN stresses and strains to mesh elements in np.triu_indices_from order
             for i,c in enumerate(self.mesh):
@@ -622,7 +622,7 @@ class CBM(object):
                 c.stress =  Stress([elem_stress[ i,0], elem_stress[ i,5], elem_stress[ i,4], elem_stress[ i,1], elem_stress[ i,3], elem_stress[i,2]])
                 c.strain =  Strain([elem_strain[ i,0], elem_strain[ i,5], elem_strain[ i,4], elem_strain[ i,1], elem_strain[ i,3], elem_strain[i,2]])
                 c.stressM = Stress([elem_stressM[i,0], elem_stressM[i,5], elem_stressM[i,4], elem_stressM[i,1], elem_stressM[i,3], elem_stressM[i,2]])
-                c.strainM = c.strain
+                c.strainM = Strain([elem_strainM[i,0], elem_strainM[i,5], elem_strainM[i,4], elem_strainM[i,1], elem_strainM[i,3], elem_strainM[i,2]])
 
         return
 
@@ -672,7 +672,7 @@ class CBM(object):
 
         # Recover the mapping from sectional Forces and Moments to Strain
         # in a non-invasive way from b3_secfem
-        elem_stress, _, elem_strain = b3_secfem_unit_recovery(b3_secfem, T)
+        elem_stress, _, elem_strain, _ = b3_secfem_unit_recovery(b3_secfem, T)
 
         # Reordering is necessary from the conventional stress/strain order
         # to match the constitutive tensor built from b3_secfem.
@@ -948,10 +948,14 @@ class CBM(object):
             # This ends up being potentially excessively slow since
             # it does a new calculation for each stress and strain field (4),
             # but only need the material coordinate strain field.
-            elem_stress, elem_stressM, elem_strain = b3_secfem_recovery(b3_secfem, F, M, T)
+            elem_stress, elem_stressM, elem_strain, elem_strainM = b3_secfem_recovery(b3_secfem, F, M, T)
 
             # 3. Store Strain results in each case / element
-            fc_to_strain_m[:, i, :] = elem_strain.T
+            # Use the material-frame strain here: fc_to_stress_m is already
+            # material-frame (elem_stressM), and pairing it with the global
+            # (unrotated) strain mismatches reference frames for any rotated
+            # (anisotropic) ply, corrupting stress/strain-based energy recovery.
+            fc_to_strain_m[:, i, :] = elem_strainM.T
             fc_to_stress_m[:, i, :] = elem_stressM.T
 
         # Save the material names as strings to be output

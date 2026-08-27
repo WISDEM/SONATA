@@ -116,6 +116,7 @@ def b3_secfem_unit_recovery(b3_secfem_in, T=None):
     stress  = fields.sigma.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
     stressM = fields.sigma_mat.copy()   # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
     strain  = fields.epsilon.copy() # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
+    strainM = fields.epsilon_mat.copy() # dim: ([3 unit F + 3 unitM, num elements, 6 voigt])
 
     if T is None:
         T = np.eye(3)
@@ -124,12 +125,14 @@ def b3_secfem_unit_recovery(b3_secfem_in, T=None):
     elem_stress_tran  = np.zeros(stress.shape)
     elem_stressM_tran = np.zeros(stress.shape)
     elem_strain_tran  = np.zeros(strain.shape)
+    elem_strainM_tran = np.zeros(strain.shape)
 
     # Need matrix for for multiplication: ([3 unit F + 3 unitM, num elements, 3x3 matrix])
     n_el = stress.shape[1]
     elem_stress_mat  = np.zeros((6, n_el, 3, 3))
     elem_stressM_mat = np.zeros((6, n_el, 3, 3))
     elem_strain_mat  = np.zeros((6, n_el, 3, 3))
+    elem_strainM_mat = np.zeros((6, n_el, 3, 3))
 
     for k in range(n_el):
         for ii in range(6):
@@ -148,23 +151,31 @@ def b3_secfem_unit_recovery(b3_secfem_in, T=None):
                 [strain[ii,k,5], strain[ii,k,1], strain[ii,k,3]],
                 [strain[ii,k,4], strain[ii,k,3], strain[ii,k,2]],
             ])
+            elem_strainM_mat[ii,k,:,:] = np.array([
+                [strainM[ii,k,0], strainM[ii,k,5], strainM[ii,k,4]],
+                [strainM[ii,k,5], strainM[ii,k,1], strainM[ii,k,3]],
+                [strainM[ii,k,4], strainM[ii,k,3], strainM[ii,k,2]],
+            ])
 
             # Rotate the matrix to SONATA coordinates
             istress  = T.T @ elem_stress_mat[ ii,k,:,:] @ T
             istressM = T.T @ elem_stressM_mat[ii,k,:,:] @ T
             istrain  = T.T @ elem_strain_mat[ ii,k,:,:] @ T
+            istrainM = T.T @ elem_strainM_mat[ii,k,:,:] @ T
 
             # Reduce back to voigt notation
             elem_stress_tran[ ii,k,:] = np.r_[np.diag(istress ), istress[ 1,2], istress[ 0,2], istress[ 0,1]]
             elem_stressM_tran[ii,k,:] = np.r_[np.diag(istressM), istressM[1,2], istressM[0,2], istressM[0,1]]
             elem_strain_tran[ ii,k,:] = np.r_[np.diag(istrain ), istrain[ 1,2], istrain[ 0,2], istrain[ 0,1]]
+            elem_strainM_tran[ii,k,:] = np.r_[np.diag(istrainM), istrainM[1,2], istrainM[0,2], istrainM[0,1]]
 
     oci2orig = np.argsort(b3_secfem_in.oci)
     elem_stress_tran  = elem_stress_tran[ :,oci2orig,:]
     elem_stressM_tran = elem_stressM_tran[:,oci2orig,:]
     elem_strain_tran  = elem_strain_tran[ :,oci2orig,:]
+    elem_strainM_tran = elem_strainM_tran[:,oci2orig,:]
 
-    return elem_stress_tran, elem_stressM_tran, elem_strain_tran
+    return elem_stress_tran, elem_stressM_tran, elem_strain_tran, elem_strainM_tran
 
 
 def b3_secfem_recovery(b3_secfem, force, moment, T=None):
@@ -183,7 +194,7 @@ def b3_secfem_recovery(b3_secfem, force, moment, T=None):
     strain_sum  -   global total strain field in SONATA coordinates
     """
 
-    stress, stressM, strain = b3_secfem_unit_recovery(b3_secfem, T=T)
+    stress, stressM, strain, strainM = b3_secfem_unit_recovery(b3_secfem, T=T)
     n_el = stress.shape[1]
 
     # Rotate forces and moments
@@ -197,6 +208,7 @@ def b3_secfem_recovery(b3_secfem, force, moment, T=None):
     stress_sum  = np.zeros((n_el,6))
     stressM_sum = np.zeros((n_el,6))
     strain_sum  = np.zeros((n_el,6))
+    strainM_sum = np.zeros((n_el,6))
     for k in range(3):
         stress_sum += myforce[ k] * stress[  k,:,:]
         stress_sum += mymoment[k] * stress[3+k,:,:]
@@ -207,7 +219,10 @@ def b3_secfem_recovery(b3_secfem, force, moment, T=None):
         strain_sum += myforce[ k] * strain[  k,:,:]
         strain_sum += mymoment[k] * strain[3+k,:,:]
 
-    return stress_sum, stressM_sum, strain_sum
+        strainM_sum += myforce[ k] * strainM[  k,:,:]
+        strainM_sum += mymoment[k] * strainM[3+k,:,:]
+
+    return stress_sum, stressM_sum, strain_sum, strainM_sum
 
 
 def DecoupleStiffness(stiff_matrix):
